@@ -274,6 +274,8 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
   <meta property="og:description" content="{esc(description)}" />
   <meta property="og:url" content="{site_url}{canonical}" />
   <link rel="stylesheet" href="styles.css" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+     crossorigin="anonymous"></script>
   {ld}
 </head>
 <body class="mode-web">
@@ -479,6 +481,8 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <link rel="canonical" href="{site_url}/posts/{pid}.html" />
   <meta name="robots" content="index,follow" />
   <link rel="stylesheet" href="../styles.css" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+     crossorigin="anonymous"></script>
 </head>
 <body class="mode-web">
   <header class="site-header">
@@ -600,6 +604,8 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <link rel="canonical" href="{site_url}/lanovel-posts/{pid}.html" />
   <meta name="robots" content="index,follow" />
   <link rel="stylesheet" href="../styles.css" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+     crossorigin="anonymous"></script>
 </head>
 <body class="mode-web">
   <header class="site-header">
