@@ -65,9 +65,43 @@ def _title_from_url(article_url: str) -> str:
 
 
 def _extract_paragraph_texts(container: BeautifulSoup) -> list[str]:
+    """
+    원본 글의 문단 구조를 최대한 보존하며 텍스트를 추출합니다.
+    광고 요소, 소셜 링크, 네비게이션 등을 완전히 제거합니다.
+    """
+    # 먼저 광고/노이즈 요소를 완전히 제거
+    noise_selectors = [
+        # 광고 관련
+        "script", "style", "noscript", "iframe",
+        "ins.adsbygoogle", ".ads", ".ad-container", ".advertisement",
+        "[data-ad]", "[id*='ad-']", "[class*='ad_']", "[class*='adfit']",
+        # Tistory/Naver 광고
+        "div.revenue_unit_wrap", "div.container_postbtn",
+        "div[data-tistory-react-app]", ".moreless-content",
+        "div.tt_news", "div.tt_footer",
+        # 소셜/공유 버튼
+        ".social-share", ".post-btn", ".container_postbtn",
+        "div.post-share", "a[href*='facebook']", "a[href*='twitter']",
+        # 댓글 영역
+        ".comments", ".reply", "#disqus_thread",
+        ".comment-form", ".commentCount",
+        # 사이트 네비게이션
+        "nav", ".navigation", ".post-nav",
+        # 카테고리/관련글 영역
+        ".another_category", ".related-post",
+    ]
+    for sel in noise_selectors:
+        for tag in container.select(sel):
+            tag.decompose()
+
     # br을 줄바꿈으로 치환해 원문 엔터를 살린다.
     for br in container.select("br"):
         br.replace_with("\n")
+
+    # &nbsp;를 공백으로
+    for text_node in container.find_all(string=True):
+        if '\xa0' in text_node:
+            text_node.replace_with(text_node.replace('\xa0', ' '))
 
     block_selectors = [
         "p", "li", "blockquote", "pre", "h2", "h3", "h4", "figcaption",
@@ -126,27 +160,55 @@ def classify_category(title: str, body: str) -> str:
 
 
 def extract_full_body(html: str) -> str:
-    """Extract full article body from HTML."""
+    """Extract full article body from HTML, removing ads and preserving structure."""
     soup = BeautifulSoup(html, "lxml")
-    
-    # Try multiple selectors to find body content
+
+    # 먼저 광고/쓸모없는 요소를 전역적으로 제거
+    global_noise = [
+        "script", "style", "noscript", "iframe",
+        "ins.adsbygoogle", "[class*='adfit']",
+        "div.revenue_unit_wrap", "div.container_postbtn",
+        "div[data-tistory-react-app]",
+        "div.tt_news", "div.tt_footer",
+        ".another_category", ".related-post",
+        ".social-share", ".post-btn",
+        ".comments", ".reply", "#disqus_thread",
+    ]
+    for sel in global_noise:
+        for tag in soup.select(sel):
+            tag.decompose()
+
+    # Tistory 블로그의 본문 컨테이너 (우선순위순)
     selectors = [
+        "div.tt_article_useless_p_margin",
+        "div.entry-content",
+        "div#postViewArea",
         "div.se-main-container",
         "div.post-content",
         "article .view-content",
         "div.article-content",
-        "div.entry-content",
         "div.content-view",
-        "div#postViewArea",
-        "div.tt_article_useless_p_margin",
     ]
     
     for selector in selectors:
         elem = soup.select_one(selector)
         if elem:
-            # Remove script, style, and ad elements
-            for tag in elem.select("script, style, .ads, .advertisement, .comments, .reply"):
-                tag.decompose()
+            # 본문 내부의 광고 링크 (ader.naver.com 등) 제거
+            for a_tag in elem.select("a[href*='ader.naver.com'], a[href*='pagead'], a[href*='adclick']"):
+                parent = a_tag.parent
+                a_tag.decompose()
+                # 광고 링크를 감싸는 빈 p/div도 제거
+                if parent and parent.name in ("p", "div") and not parent.get_text(strip=True):
+                    parent.decompose()
+
+            # 광고 이미지 제거 (ad 관련 URL 패턴)
+            for img in elem.select("img"):
+                src = img.get("src", "") or img.get("data-src", "") or ""
+                if any(ad_pat in src.lower() for ad_pat in ["ader.naver", "pagead", "adclick", "adsbygoogle", "ad.daum", "click.partner"]):
+                    parent = img.parent
+                    img.decompose()
+                    if parent and parent.name in ("p", "div", "a", "figure") and not parent.get_text(strip=True):
+                        parent.decompose()
 
             paragraphs = _extract_paragraph_texts(elem)
             text = "\n\n".join(paragraphs).strip()
@@ -154,11 +216,10 @@ def extract_full_body(html: str) -> str:
             if text and len(text) > 60:
                 return text
     
-    # Fallback: try to get text from body minus header/footer
+    # Fallback: body에서 content 추출
     body = soup.find('body')
     if body:
-        # Remove common non-content elements
-        for tag in body.select("header, footer, nav, script, style, .header, .footer, .sidebar, .nav, .ads"):
+        for tag in body.select("header, footer, nav, .header, .footer, .sidebar, .nav, .ads"):
             tag.decompose()
 
         paragraphs = _extract_paragraph_texts(body)
@@ -166,7 +227,6 @@ def extract_full_body(html: str) -> str:
         if text and len(text) > 120:
             return text
     
-    # 최종 fallback: 문장 단위로 너무 짧은 노이즈만 제거하고 반환
     fallback_text = soup.get_text("\n", strip=True)
     fallback_text = re.sub(r"\n{3,}", "\n\n", fallback_text).strip()
     if len(fallback_text) > 80:
@@ -176,17 +236,30 @@ def extract_full_body(html: str) -> str:
 
 
 def extract_capture_image_urls(html: str, article_url: str) -> list[str]:
-    """Extract image URLs from article content area (used for comment capture linking)."""
+    """
+    기사 본문 영역에서 실제 콘텐츠 이미지(댓글 캡처 등)만 추출합니다.
+    소셜 아이콘, 로고, 광고 이미지 등은 필터링합니다.
+    """
     soup = BeautifulSoup(html, "lxml")
+
+    # 광고/노이즈 요소 제거
+    for sel in ["script", "style", "noscript", "iframe",
+                "ins.adsbygoogle", "div.revenue_unit_wrap",
+                "div.container_postbtn", "div[data-tistory-react-app]",
+                ".another_category", ".related-post",
+                "nav", "header", "footer", ".sidebar"]:
+        for tag in soup.select(sel):
+            tag.decompose()
+
     selectors = [
+        "div.tt_article_useless_p_margin",
+        "div.entry-content",
+        "div#postViewArea",
         "div.se-main-container",
         "div.post-content",
         "article .view-content",
         "div.article-content",
-        "div.entry-content",
         "div.content-view",
-        "div#postViewArea",
-        "div.tt_article_useless_p_margin",
     ]
 
     candidates: list[str] = []
@@ -199,8 +272,27 @@ def extract_capture_image_urls(html: str, article_url: str) -> list[str]:
     if not containers and soup.body:
         containers = [soup.body]
 
+    # 필터링할 이미지 URL 패턴 (소셜 아이콘, 로고, 광고, 장식 등)
+    skip_patterns = [
+        # 소셜 아이콘
+        "fb.png", "yt.png", "nv.jpg", "nv.png", "tw.png",
+        "facebook", "youtube", "twitter", "instagram",
+        # 사이트 로고/장식
+        "HPlogo", "logo", "icon", "favicon", "banner",
+        "skin/images/", "skin/img/",
+        # 광고
+        "ader.naver", "pagead", "adclick", "adsbygoogle",
+        "ad.daum", "click.partner", "doubleclick",
+        # 기타 노이즈
+        "blank.gif", "pixel", "spacer", "loading",
+        "emoticon", "sticker",
+    ]
+
+    # 최소 이미지 크기 (width/height가 명시된 경우)
+    MIN_IMAGE_DIM = 100
+
     for container in containers:
-        for img in container.select("img, source"):
+        for img in container.select("img"):
             raw = (
                 img.get("data-src")
                 or img.get("data-original")
@@ -218,8 +310,26 @@ def extract_capture_image_urls(html: str, article_url: str) -> list[str]:
                 continue
 
             full = urljoin(article_url, raw)
-            if full.startswith("http"):
-                candidates.append(full)
+            if not full.startswith("http"):
+                continue
+
+            # 노이즈 이미지 필터링
+            lower_url = full.lower()
+            if any(pat in lower_url for pat in skip_patterns):
+                continue
+
+            # 너무 작은 이미지 건너뛰기 (명시된 경우)
+            w = img.get("width", "")
+            h = img.get("height", "")
+            try:
+                if w and int(w) < MIN_IMAGE_DIM:
+                    continue
+                if h and int(h) < MIN_IMAGE_DIM:
+                    continue
+            except (ValueError, TypeError):
+                pass
+
+            candidates.append(full)
 
     # de-duplicate preserving order
     return list(dict.fromkeys(candidates))
