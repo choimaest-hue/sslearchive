@@ -216,26 +216,44 @@ def related_posts_nav(items: list[dict[str, Any]], current_id: str, limit: int =
     prev_items = items[max(0, current_idx - limit):current_idx]
     next_items = items[current_idx + 1:min(len(items), current_idx + 1 + limit)]
     
-    if not prev_items and not next_items:
-        return ""
+    # 이전글/다음글 네비게이션
+    nav_html = ""
+    prev_post = prev_items[-1] if prev_items else None
+    next_post = next_items[0] if next_items else None
     
-    nav_html = '<section class="related-posts"><h3>다른 글</h3><div class="related-grid">'
+    if prev_post or next_post:
+        nav_html += '<section class="prev-next-nav">'
+        if prev_post:
+            prev_title = esc(prev_post.get("title", ""))
+            prev_id = esc(prev_post.get("id", ""))
+            nav_html += f'<a href="{prev_id}.html" class="prev-next-item"><span class="prev-next-label">← 이전글</span><span class="prev-next-title">{prev_title}</span></a>'
+        else:
+            nav_html += '<div style="opacity: 0.3;"></div>'
+        
+        if next_post:
+            next_title = esc(next_post.get("title", ""))
+            next_id = esc(next_post.get("id", ""))
+            nav_html += f'<a href="{next_id}.html" class="prev-next-item"><span class="prev-next-label">다음글 →</span><span class="prev-next-title">{next_title}</span></a>'
+        else:
+            nav_html += '<div style="opacity: 0.3;"></div>'
+        nav_html += '</section>'
     
-    # 이전 글들 (역순으로 표시: 가장 가까운 글이 맨 앞)
-    for item in reversed(prev_items):
-        title = esc(item.get("title", ""))
-        pid = esc(item.get("id", ""))
-        cat = esc(item.get("category", "기타"))
-        nav_html += f'<a href="{pid}.html" class="related-post"><span class="related-cat">{cat}</span><span class="related-title">{title}</span></a>'
+    # 관련 글 목록 (이전/다음 제외)
+    related_items = []
+    if prev_items and len(prev_items) > 1:
+        related_items.extend(reversed(prev_items[:-1][:3]))
+    if next_items and len(next_items) > 1:
+        related_items.extend(next_items[1:3])
     
-    # 다음 글들
-    for item in next_items:
-        title = esc(item.get("title", ""))
-        pid = esc(item.get("id", ""))
-        cat = esc(item.get("category", "기타"))
-        nav_html += f'<a href="{pid}.html" class="related-post"><span class="related-cat">{cat}</span><span class="related-title">{title}</span></a>'
+    if related_items:
+        nav_html += '<section class="related-posts"><h3>관련 글 더보기</h3><div class="related-grid">'
+        for item in related_items:
+            title = esc(item.get("title", ""))
+            pid = esc(item.get("id", ""))
+            cat = esc(item.get("category", "기타"))
+            nav_html += f'<a href="{pid}.html" class="related-post"><span class="related-cat">{cat}</span><span class="related-title">{title}</span></a>'
+        nav_html += '</div></section>'
     
-    nav_html += '</div></section>'
     return nav_html
 
 
@@ -495,7 +513,10 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
     <section class="hero">
       <h1>{title}</h1>
       <p class="subtitle">{cat} · {date}</p>
-      <p><a href="../ssul.html">목록으로</a> · <a href="{source}" rel="nofollow noopener" target="_blank">원문 출처</a></p>
+      <div class="nav-panel">
+        <a href="../ssul.html" class="nav-btn secondary">← 목록으로</a>
+        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn">📖 원문 보기</a>
+      </div>
     </section>
     <section class="layout">
       <article class="panel article-body">
@@ -618,7 +639,10 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     <section class="hero">
       <h1>{title}</h1>
       <p class="subtitle">{date}</p>
-      <p><a href="../lanovel.html">라노벨 목록</a> · <a href="{source}" rel="nofollow noopener" target="_blank">원문 페이지</a></p>
+      <div class="nav-panel">
+        <a href="../lanovel.html" class="nav-btn secondary">← 라노벨 목록</a>
+        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn">📖 원문 페이지</a>
+      </div>
     </section>
     <section class="layout">
       <article class="panel article-body"><div class="article-top-link">{top_link}</div>{images_html}{content_html}</article>
