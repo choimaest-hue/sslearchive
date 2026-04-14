@@ -283,6 +283,7 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(description)}" />
   <link rel="canonical" href="{site_url}{canonical}" />
@@ -494,8 +495,9 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
   <title>{title} | 썰TV</title>
-    <meta name="description" content="{title}" />
+  <meta name="description" content="{title}" />
   <link rel="canonical" href="{site_url}/posts/{pid}.html" />
   <meta name="robots" content="index,follow" />
   <link rel="stylesheet" href="../styles.css" />
@@ -620,6 +622,7 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
   <title>{title} | 라노벨 아카이브</title>
   <meta name="description" content="라노벨 게시글 상세" />
   <link rel="canonical" href="{site_url}/lanovel-posts/{pid}.html" />
