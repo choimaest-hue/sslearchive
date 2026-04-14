@@ -289,9 +289,14 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
   <link rel="canonical" href="{site_url}{canonical}" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="썰TV" />
+  <meta property="og:locale" content="ko_KR" />
   <meta property="og:title" content="{esc(title)}" />
   <meta property="og:description" content="{esc(description)}" />
   <meta property="og:url" content="{site_url}{canonical}" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{esc(title)}" />
+  <meta name="twitter:description" content="{esc(description)}" />
   <link rel="stylesheet" href="styles.css" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
      crossorigin="anonymous"></script>
@@ -455,6 +460,28 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
         capture_urls = item.get("comment_capture_urls") or []
         source = esc(item.get("source_url", ""))
         date = esc(item.get("published_at", ""))
+
+        # SEO: body excerpt for meta description
+        raw_excerpt = re.sub(r'\s+', ' ', body).strip()[:160]
+        description = esc(raw_excerpt) if raw_excerpt else title
+
+        # SEO: first comment capture image for og:image
+        og_image = esc(str(capture_urls[0])) if capture_urls else ""
+
+        # SEO: Article JSON-LD
+        article_payload = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": item.get("title", ""),
+            "description": raw_excerpt if raw_excerpt else item.get("title", ""),
+            "url": f"{site_url}/posts/{item.get('id', '')}.html",
+            "datePublished": item.get("published_at", ""),
+            "publisher": {"@type": "Organization", "name": "썰TV"},
+            "mainEntityOfPage": {"@type": "WebPage", "@id": f"{site_url}/posts/{item.get('id', '')}.html"},
+        }
+        if capture_urls:
+            article_payload["image"] = str(capture_urls[0])
+        article_ld = json.dumps(article_payload, ensure_ascii=False)
         
         # 관련 글 네비게이션 (앞뒤로 5개씩)
         related_nav = related_posts_nav(items, item.get("id", ""), limit=5)
@@ -497,12 +524,23 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
   <title>{title} | 썰TV</title>
-  <meta name="description" content="{title}" />
+  <meta name="description" content="{description}" />
   <link rel="canonical" href="{site_url}/posts/{pid}.html" />
-  <meta name="robots" content="index,follow" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="썰TV" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta property="og:title" content="{title}" />
+  <meta property="og:description" content="{description}" />
+  <meta property="og:url" content="{site_url}/posts/{pid}.html" />
+  {f'<meta property="og:image" content="{og_image}" />' if og_image else ''}
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{title}" />
+  <meta name="twitter:description" content="{description}" />
   <link rel="stylesheet" href="../styles.css" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
      crossorigin="anonymous"></script>
+  <script type="application/ld+json">{article_ld}</script>
 </head>
 <body class="mode-web">
   <header class="site-header">
@@ -595,6 +633,28 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
         image_urls = item.get("image_urls") or []
         content_html = lanovel_content_html(item)
         preview_url = ncode_url or source
+
+        # SEO: description from synopsis or title
+        raw_synopsis = re.sub(r'\s+', ' ', item.get('synopsis', '') or '').strip()[:160]
+        ln_description = esc(raw_synopsis) if raw_synopsis else title
+
+        # SEO: first image for og:image
+        ln_og_image = esc(str(image_urls[0])) if image_urls else ""
+
+        # SEO: Article JSON-LD
+        ln_article_payload = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": item.get("title", ""),
+            "description": raw_synopsis if raw_synopsis else item.get("title", ""),
+            "url": f"{site_url}/lanovel-posts/{item.get('id', '')}.html",
+            "datePublished": item.get("published_at", ""),
+            "publisher": {"@type": "Organization", "name": "썰TV"},
+            "mainEntityOfPage": {"@type": "WebPage", "@id": f"{site_url}/lanovel-posts/{item.get('id', '')}.html"},
+        }
+        if image_urls:
+            ln_article_payload["image"] = str(image_urls[0])
+        ln_article_ld = json.dumps(ln_article_payload, ensure_ascii=False)
         
         # 관련 글 네비게이션 (앞뒤로 5개씩)
         related_nav = related_posts_nav(items, item.get("id", ""), limit=5)
@@ -624,12 +684,23 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
   <title>{title} | 라노벨 아카이브</title>
-  <meta name="description" content="라노벨 게시글 상세" />
+  <meta name="description" content="{ln_description}" />
   <link rel="canonical" href="{site_url}/lanovel-posts/{pid}.html" />
-  <meta name="robots" content="index,follow" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="썰TV" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta property="og:title" content="{title}" />
+  <meta property="og:description" content="{ln_description}" />
+  <meta property="og:url" content="{site_url}/lanovel-posts/{pid}.html" />
+  {f'<meta property="og:image" content="{ln_og_image}" />' if ln_og_image else ''}
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{title}" />
+  <meta name="twitter:description" content="{ln_description}" />
   <link rel="stylesheet" href="../styles.css" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
      crossorigin="anonymous"></script>
+  <script type="application/ld+json">{ln_article_ld}</script>
 </head>
 <body class="mode-web">
   <header class="site-header">
