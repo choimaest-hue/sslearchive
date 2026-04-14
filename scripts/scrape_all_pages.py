@@ -73,7 +73,8 @@ def _extract_paragraph_texts(container: BeautifulSoup) -> list[str]:
     noise_selectors = [
         # 광고 관련
         "script", "style", "noscript", "iframe",
-        "ins.adsbygoogle", ".ads", ".ad-container", ".advertisement",
+        "ins.adsbygoogle", "ins[class*='adsbygoogle']",
+        ".ads", ".ad-container", ".advertisement",
         "[data-ad]", "[id*='ad-']", "[class*='ad_']", "[class*='adfit']",
         # Tistory/Naver 광고
         "div.revenue_unit_wrap", "div.container_postbtn",
@@ -81,7 +82,7 @@ def _extract_paragraph_texts(container: BeautifulSoup) -> list[str]:
         "div.tt_news", "div.tt_footer",
         # 소셜/공유 버튼
         ".social-share", ".post-btn", ".container_postbtn",
-        "div.post-share", "a[href*='facebook']", "a[href*='twitter']",
+        "div.post-share",
         # 댓글 영역
         ".comments", ".reply", "#disqus_thread",
         ".comment-form", ".commentCount",
@@ -103,38 +104,17 @@ def _extract_paragraph_texts(container: BeautifulSoup) -> list[str]:
         if '\xa0' in text_node:
             text_node.replace_with(text_node.replace('\xa0', ' '))
 
-    block_selectors = [
-        "p", "li", "blockquote", "pre", "h2", "h3", "h4", "figcaption",
-        "div.txc-textbox", "div[data-ke-type='text']",
-    ]
+    # 전체 텍스트를 먼저 추출 (광고 제거 후이므로 안전)
+    # <center>, <div id="contentArea"> 등에 <span>+<br> 형태로 된 컨텐츠도 포함
+    full_text = container.get_text("\n", strip=True)
+    full_text = re.sub(r"\n{3,}", "\n\n", full_text).strip()
 
-    paragraphs: list[str] = []
-    seen: set[str] = set()
+    if full_text:
+        chunks = [chunk.strip() for chunk in full_text.split("\n\n") if chunk.strip()]
+        if chunks:
+            return chunks
 
-    for sel in block_selectors:
-        for node in container.select(sel):
-            text = node.get_text("\n", strip=True)
-            text = re.sub(r"\n{3,}", "\n\n", text)
-            text = "\n".join(line.rstrip() for line in text.split("\n"))
-            text = text.strip()
-            if not text:
-                continue
-            if len(text) < 2:
-                continue
-            if text in seen:
-                continue
-            seen.add(text)
-            paragraphs.append(text)
-
-    if paragraphs:
-        return paragraphs
-
-    # 블록 태그가 없으면 컨테이너 전체 텍스트를 줄단위로 살린다.
-    fallback = container.get_text("\n", strip=True)
-    fallback = re.sub(r"\n{3,}", "\n\n", fallback).strip()
-    if not fallback:
-        return []
-    return [chunk.strip() for chunk in fallback.split("\n\n") if chunk.strip()]
+    return []
 
 
 def classify_category(title: str, body: str) -> str:
@@ -193,6 +173,13 @@ def extract_full_body(html: str) -> str:
     for selector in selectors:
         elem = soup.select_one(selector)
         if elem:
+            # 본문 내부에 남아있을 수 있는 광고 요소 추가 제거
+            for ad_sel in ["ins.adsbygoogle", "ins[class*='adsbygoogle']",
+                           "[class*='adfit']", "div.revenue_unit_wrap",
+                           "div[data-tistory-react-app]"]:
+                for ad_tag in elem.select(ad_sel):
+                    ad_tag.decompose()
+
             # 본문 내부의 광고 링크 (ader.naver.com 등) 제거
             for a_tag in elem.select("a[href*='ader.naver.com'], a[href*='pagead'], a[href*='adclick']"):
                 parent = a_tag.parent
