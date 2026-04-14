@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "python scripts/build_site.py --site-url https://sslearchive.vercel.app --per-page 10 --lanovel-per-page 6",
+  "buildCommand": "python scripts/build_site.py --site-url https://dist-ashen-zeta-71.vercel.app --per-page 10 --lanovel-per-page 6",
   "outputDirectory": "dist"
 }
