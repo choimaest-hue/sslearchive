@@ -759,9 +759,8 @@ def write_robots(output: Path, site_url: str) -> None:
 def copy_assets(output: Path, assets_dir: Path) -> None:
     (output / "styles.css").write_text((assets_dir / "styles.css").read_text(encoding="utf-8"), encoding="utf-8")
     (output / "app.js").write_text((assets_dir / "app.js").read_text(encoding="utf-8"), encoding="utf-8")
-    # Google Search Console verification file
-    gv = assets_dir / "googlec39d7457a278aaa6.html"
-    if gv.exists():
+    # Google Search Console verification files
+    for gv in assets_dir.glob("google*.html"):
         (output / gv.name).write_text(gv.read_text(encoding="utf-8"), encoding="utf-8")
 
 
