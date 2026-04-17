@@ -736,17 +736,47 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     return written
 
 
-def write_sitemap(output: Path, site_url: str, pages: list[str]) -> None:
+def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[str]) -> None:
     now = datetime.now(UTC).date().isoformat()
     urls = [f"{site_url}/" if p == "index.html" else f"{site_url}/{p}" for p in pages]
     xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for u in urls:
         xml.append("  <url>")
-        xml.append(f"    <loc>{esc(u)}</loc>")
+        xml.append(f"    <loc>{u}</loc>")
         xml.append(f"    <lastmod>{now}</lastmod>")
         xml.append("  </url>")
     xml.append("</urlset>")
-    (output / "sitemap.xml").write_text("\n".join(xml), encoding="utf-8")
+    (output / filename).write_text("\n".join(xml), encoding="utf-8")
+
+
+def write_sitemap(output: Path, site_url: str, pages: list[str]) -> None:
+    now = datetime.now(UTC).date().isoformat()
+
+    # Split pages into sub-sitemaps
+    listing_pages = [p for p in pages if not p.startswith("posts/") and not p.startswith("lanovel-posts/")]
+    ssul_pages = [p for p in pages if p.startswith("posts/")]
+    lanovel_pages = [p for p in pages if p.startswith("lanovel-posts/")]
+
+    subs: list[str] = []
+    if listing_pages:
+        _write_sub_sitemap(output, "sitemap-listing.xml", site_url, listing_pages)
+        subs.append("sitemap-listing.xml")
+    if ssul_pages:
+        _write_sub_sitemap(output, "sitemap-ssul.xml", site_url, ssul_pages)
+        subs.append("sitemap-ssul.xml")
+    if lanovel_pages:
+        _write_sub_sitemap(output, "sitemap-lanovel.xml", site_url, lanovel_pages)
+        subs.append("sitemap-lanovel.xml")
+
+    # Write sitemap index
+    idx = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for s in subs:
+        idx.append("  <sitemap>")
+        idx.append(f"    <loc>{site_url}/{s}</loc>")
+        idx.append(f"    <lastmod>{now}</lastmod>")
+        idx.append("  </sitemap>")
+    idx.append("</sitemapindex>")
+    (output / "sitemap.xml").write_text("\n".join(idx), encoding="utf-8")
 
 
 def write_robots(output: Path, site_url: str) -> None:
