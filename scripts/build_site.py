@@ -83,16 +83,35 @@ def header_html(active: str, prefix: str = "") -> str:
     ssul_cls = "main-nav-link active" if active == "ssul" else "main-nav-link"
     lanovel_cls = "main-nav-link active" if active == "lanovel" else "main-nav-link"
     p = prefix + "/" if prefix else ""
+    idx_path = f"{prefix}/search-index.json" if prefix else "search-index.json"
     return f"""
 <header class="site-header">
   <div class="site-header-inner">
     <a href="{p}index.html" class="brand">썰TV</a>
-    <nav class="main-nav" aria-label="메인 주제">
-      <a href="{p}ssul.html" class="{ssul_cls}">썰 아카이브</a>
-      <a href="{p}lanovel.html" class="{lanovel_cls}">라노벨 아카이브</a>
-    </nav>
+    <div class="header-actions">
+      <nav class="main-nav" aria-label="메인 주제">
+        <a href="{p}ssul.html" class="{ssul_cls}">썰 아카이브</a>
+        <a href="{p}lanovel.html" class="{lanovel_cls}">라노벨 아카이브</a>
+      </nav>
+      <button class="search-btn" id="searchToggle" aria-label="검색 열기" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
   </div>
 </header>
+<div class="search-overlay" id="searchOverlay" aria-hidden="true" data-index="{idx_path}">
+  <div class="search-overlay-bg" id="searchOverlayBg"></div>
+  <div class="search-overlay-panel">
+    <div class="search-field-row">
+      <svg class="search-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" class="search-input" placeholder="제목, 카테고리 검색..." autocomplete="off" spellcheck="false" />
+      <button class="search-close-btn" id="searchClose" aria-label="검색 닫기" type="button">✕</button>
+    </div>
+    <div class="search-results" id="searchResults">
+      <p class="search-hint">검색어를 입력하세요</p>
+    </div>
+  </div>
+</div>
 """
 
 
@@ -315,6 +334,38 @@ def sidebar_ads_html(two_units: bool = False) -> str:
         units.append(ad_unit_html("광고", 220))
     return f'<aside class="ad-rail">{"".join(units)}</aside>'
 
+def category_widget_html(cat_counts: dict[str, int], active_cat: str | None = None, prefix: str = "") -> str:
+    p = prefix + "/" if prefix else ""
+    total = sum(cat_counts.values())
+    all_cls = " active" if active_cat is None else ""
+    rows = [
+        f'<li><a href="{p}ssul.html" class="cat-widget-item{all_cls}">전체<span class="cat-count">{total}</span></a></li>'
+    ]
+    for cat in CATEGORIES:
+        slug = SLUG[cat]
+        count = cat_counts.get(cat, 0)
+        cls = " active" if cat == active_cat else ""
+        rows.append(
+            f'<li><a href="{p}category-{slug}.html" class="cat-widget-item{cls}">'
+            f'{esc(cat)}<span class="cat-count">{count}</span>'
+            f'</a></li>'
+        )
+    rows_html = "".join(rows)
+    return (
+        f'<nav class="cat-widget">'
+        f'<div class="cat-widget-title">카테고리</div>'
+        f'<ul class="cat-widget-list">{rows_html}</ul>'
+        f'</nav>'
+    )
+
+
+def sidebar_with_cats_html(cat_counts: dict[str, int], active_cat: str | None = None, two_units: bool = False, prefix: str = "") -> str:
+    units = [ad_unit_html("광고", 280)]
+    if two_units:
+        units.append(ad_unit_html("광고", 220))
+    units_html = "".join(units)
+    cat_html = category_widget_html(cat_counts, active_cat, prefix)
+    return f'<aside class="ad-rail">{cat_html}{units_html}</aside>'
 
 def reading_ad_html() -> str:
     return f"""
@@ -418,6 +469,7 @@ def write_home(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: li
 def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, per_page: int) -> list[str]:
     pages = chunked(items, per_page)
     written: list[str] = []
+    cat_counts: dict[str, int] = Counter(x.get("category", "기타") for x in items)
 
     controls_html = "".join(
         f'<a class="cat-chip" href="category-{SLUG[cat]}.html">{esc(cat)}</a>' for cat in CATEGORIES
@@ -442,7 +494,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
       <div class="post-grid">{cards}</div>
       {pagination_html("ssul", page_no, len(pages))}
     </div>
-    {sidebar_ads_html(two_units=True)}
+    {sidebar_with_cats_html(cat_counts, active_cat=None, two_units=True)}
   </div>
 </main>
 """
@@ -464,6 +516,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
 
 def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: str, per_page: int) -> list[str]:
     written: list[str] = []
+    cat_counts: dict[str, int] = Counter(x.get("category", "기타") for x in items)
     for category in CATEGORIES:
         slug = SLUG[category]
         category_items = [x for x in items if x.get("category") == category]
@@ -485,7 +538,7 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
       <div class="post-grid">{cards}</div>
       {pagination_html(f"category-{slug}", page_no, len(pages))}
     </div>
-    {sidebar_ads_html()}
+    {sidebar_with_cats_html(cat_counts, active_cat=category)}
   </div>
 </main>
 """
@@ -781,6 +834,37 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     return written
 
 
+def write_search_index(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: list[dict[str, Any]]) -> None:
+    index = []
+    for item in ssul_items:
+        pid = item.get("id", "")
+        title = item.get("title", "")
+        excerpt = plain_excerpt(item.get("summary") or item.get("body") or "", title, 100)
+        index.append({
+            "i": pid,
+            "t": title,
+            "e": excerpt,
+            "c": item.get("category", ""),
+            "d": (item.get("published_at") or "")[:10],
+            "T": "s",
+        })
+    for item in lanovel_items:
+        pid = item.get("id", "")
+        title = item.get("title", "")
+        excerpt = lanovel_list_summary(item)
+        index.append({
+            "i": pid,
+            "t": title,
+            "e": excerpt,
+            "d": (item.get("published_at") or "")[:10],
+            "T": "l",
+        })
+    (output / "search-index.json").write_text(
+        json.dumps(index, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
 def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[str], date_map: dict[str, str] | None = None) -> None:
     now = datetime.now(UTC).date().isoformat()
     urls = [f"{site_url}/" if p == "index.html" else f"{site_url}/{p}" for p in pages]
@@ -868,6 +952,7 @@ def main() -> None:
     lanovel_items = load_json(Path(args.lanovel_data))
 
     copy_assets(out, Path(args.assets))
+    write_search_index(out, ssul_items, lanovel_items)
 
     # Build date map: post path → actual publication date (for sitemap lastmod)
     date_map: dict[str, str] = {}
