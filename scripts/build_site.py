@@ -356,11 +356,11 @@ def ad_unit_html(label: str, min_height: int = 250) -> str:
   <div class="ad-slot-label">{esc(label)}</div>
   <ins class="adsbygoogle"
        style="display:block; min-height:{min_height}px"
+       data-ssletv-ad="true"
        data-ad-host="{ADSENSE_HOST}"
        data-ad-client="{ADSENSE_CLIENT}"
        data-ad-format="auto"
        data-full-width-responsive="true"></ins>
-  <script>(adsbygoogle = window.adsbygoogle || []).push({{}});</script>
 </div>
 """
 

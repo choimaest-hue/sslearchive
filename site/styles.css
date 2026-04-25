@@ -730,7 +730,7 @@ body.mode-mobile .sidebar {
 }
 
 body.mode-mobile .ad-rail {
-  position: static;
+  display: none;
 }
 
 @keyframes reveal {
@@ -754,6 +754,7 @@ body.mode-mobile .ad-rail {
   }
 
   .ad-rail {
+    display: none;
     position: static;
   }
 
