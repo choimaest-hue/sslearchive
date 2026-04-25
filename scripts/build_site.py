@@ -28,6 +28,8 @@ SLUG = {
   "기타 화제 썰": "hot-issue",
 }
 DEFAULT_PER_PAGE = 10
+ADSENSE_CLIENT = "ca-pub-3397494907696633"
+ADSENSE_HOST = "ca-host-pub-9691043933427338"
 
 
 def esc(text: str) -> str:
@@ -276,6 +278,28 @@ def build_json_ld(items: list[dict[str, Any]], site_url: str, path_prefix: str) 
     return json.dumps(payload, ensure_ascii=False)
 
 
+def ad_unit_html(label: str, min_height: int = 250) -> str:
+    return f"""
+<div class="panel ad-slot">
+  <div class="ad-slot-label">{esc(label)}</div>
+  <ins class="adsbygoogle"
+       style="display:block; min-height:{min_height}px"
+       data-ad-host="{ADSENSE_HOST}"
+       data-ad-client="{ADSENSE_CLIENT}"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({{}});</script>
+</div>
+"""
+
+
+def sidebar_ads_html(two_units: bool = False) -> str:
+    units = [ad_unit_html("스폰서 광고", 280)]
+    if two_units:
+        units.append(ad_unit_html("스폰서 광고", 220))
+    return f'<aside class="sidebar ad-rail">{"".join(units)}</aside>'
+
+
 def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "") -> str:
     ld = f'<script type="application/ld+json">{json_ld}</script>' if json_ld else ""
     return f"""<!doctype html>
@@ -297,8 +321,9 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="{esc(title)}" />
   <meta name="twitter:description" content="{esc(description)}" />
+  <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
   <link rel="stylesheet" href="styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
      crossorigin="anonymous"></script>
   {ld}
 </head>
@@ -382,10 +407,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
   </section>
   <section class="layout">
     <div class="grid">{cards}</div>
-    <aside class="sidebar">
-      <div class="panel ad-slot">광고 영역 A (300x250)</div>
-      <div class="panel ad-slot">광고 영역 B (반응형)</div>
-    </aside>
+    {sidebar_ads_html(two_units=True)}
   </section>
   {pagination_html("ssul", page_no, len(pages))}
 </main>
@@ -425,9 +447,7 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
   </section>
   <section class="layout">
     <div class="grid">{cards}</div>
-    <aside class="sidebar">
-      <div class="panel ad-slot">광고 영역</div>
-    </aside>
+    {sidebar_ads_html()}
   </section>
   {pagination_html(f"category-{slug}", page_no, len(pages))}
 </main>
@@ -537,8 +557,9 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{description}" />
+  <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
   <link rel="stylesheet" href="../styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
      crossorigin="anonymous"></script>
   <script type="application/ld+json">{article_ld}</script>
 </head>
@@ -563,7 +584,7 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
           {body_html}
           {capture_html}
       </article>
-      <aside class="sidebar"><div class="panel ad-slot">광고 영역</div></aside>
+      {sidebar_ads_html()}
     </section>
     {related_nav}
   </main>
@@ -597,9 +618,7 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
   </section>
   <section class="layout">
     <div class="grid lanovel-grid">{cards}</div>
-    <aside class="sidebar">
-      <div class="panel ad-slot">광고 영역</div>
-    </aside>
+    {sidebar_ads_html()}
   </section>
   {pagination_html("lanovel", page_no, len(pages))}
 </main>
@@ -697,8 +716,9 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{ln_description}" />
+  <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
   <link rel="stylesheet" href="../styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3397494907696633"
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
      crossorigin="anonymous"></script>
   <script type="application/ld+json">{ln_article_ld}</script>
 </head>
@@ -720,7 +740,7 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     </section>
     <section class="layout">
       <article class="panel article-body"><div class="article-top-link">{top_link}</div>{images_html}{content_html}</article>
-      <aside class="sidebar"><div class="panel ad-slot">광고 영역</div></aside>
+      {sidebar_ads_html()}
     </section>
     {related_nav}
   </main>
