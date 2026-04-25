@@ -414,6 +414,10 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
   {body}
   {footer_html()}
   <button id="mobileWebToggle" class="mobile-web-toggle" type="button">모바일로 보기</button>
+  <a id="randomPostBtn" class="random-post-btn" href="#" data-index="search-index.json" aria-label="랜덤 글 읽기" title="랜덤 글 읽기">
+    <span class="random-btn-icon">🎲</span>
+    <span class="random-btn-label">랜덤</span>
+  </a>
   <script src="app.js"></script>
 </body>
 </html>
@@ -674,6 +678,10 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   </main>
   {footer_html("..")}
   <button id="mobileWebToggle" class="mobile-web-toggle" type="button">모바일로 보기</button>
+  <a id="randomPostBtn" class="random-post-btn" href="#" data-index="../search-index.json" aria-label="랜덤 글 읽기" title="랜덤 글 읽기">
+    <span class="random-btn-icon">🎲</span>
+    <span class="random-btn-label">랜덤</span>
+  </a>
   <script src="../app.js"></script>
 </body>
 </html>
@@ -824,6 +832,10 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   </main>
   {footer_html("..")}
   <button id="mobileWebToggle" class="mobile-web-toggle" type="button">모바일로 보기</button>
+  <a id="randomPostBtn" class="random-post-btn" href="#" data-index="../search-index.json" aria-label="랜덤 글 읽기" title="랜덤 글 읽기">
+    <span class="random-btn-icon">🎲</span>
+    <span class="random-btn-label">랜덤</span>
+  </a>
   <script src="../app.js"></script>
 </body>
 </html>

@@ -65,6 +65,39 @@
   initMode();
 })();
 
+// ─── Random Post ─────────────────────────────────────
+(() => {
+  const btn = document.getElementById('randomPostBtn');
+  if (!btn) return;
+  const indexUrl = btn.dataset.index || 'search-index.json';
+  const rootPrefix = indexUrl.replace('search-index.json', '');
+
+  let cache = null;
+
+  async function getIndex() {
+    if (cache) return cache;
+    try {
+      const res = await fetch(indexUrl);
+      cache = await res.json();
+    } catch (_) { cache = []; }
+    return cache;
+  }
+
+  btn.addEventListener('click', async e => {
+    e.preventDefault();
+    const index = await getIndex();
+    if (!index.length) return;
+    const item = index[Math.floor(Math.random() * index.length)];
+    const path = item.T === 'l'
+      ? rootPrefix + 'lanovel-posts/' + item.i + '.html'
+      : rootPrefix + 'posts/' + item.i + '.html';
+    window.location.href = path;
+  });
+
+  // Pre-fetch on hover so navigation is instant
+  btn.addEventListener('mouseenter', () => getIndex(), { once: true });
+})();
+
 // ─── Search ──────────────────────────────────────────
 (() => {
   const overlay = document.getElementById('searchOverlay');
