@@ -331,7 +331,7 @@ def reading_ad_html() -> str:
 """
 
 
-def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "") -> str:
+def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "", robots: str = "index,follow,max-image-preview:large") -> str:
     ld = f'<script type="application/ld+json">{json_ld}</script>' if json_ld else ""
     return f"""<!doctype html>
 <html lang="ko">
@@ -342,7 +342,7 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(description)}" />
   <link rel="canonical" href="{site_url}{canonical}" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="robots" content="{robots}" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="썰TV" />
   <meta property="og:locale" content="ko_KR" />
@@ -425,7 +425,10 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
 
     for page_no, page_items in enumerate(pages, start=1):
         current_file = list_page_name("ssul", page_no)
-        canonical = f"/{current_file}"
+        # Paginated pages (2+) are noindex: no SEO value, saves crawl budget
+        is_paginated = page_no > 1
+        canonical = "/ssul.html" if is_paginated else f"/{current_file}"
+        page_robots = "noindex,follow" if is_paginated else "index,follow,max-image-preview:large"
         cards = "\n".join(ssul_card_html(x) for x in page_items) or '<p>표시할 데이터가 없습니다.</p>'
         body = f"""
 <main class="shell">
@@ -451,6 +454,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
             active="ssul",
             site_url=site_url,
             json_ld=build_json_ld(page_items, site_url, "posts"),
+            robots=page_robots,
         )
         (output / current_file).write_text(html_text, encoding="utf-8")
         written.append(current_file)
@@ -466,7 +470,9 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
         pages = chunked(category_items, per_page)
         for page_no, page_items in enumerate(pages, start=1):
             current_file = list_page_name(f"category-{slug}", page_no)
-            canonical = f"/{current_file}"
+            is_paginated = page_no > 1
+            canonical = f"/category-{slug}.html" if is_paginated else f"/{current_file}"
+            page_robots = "noindex,follow" if is_paginated else "index,follow,max-image-preview:large"
             cards = "\n".join(ssul_card_html(x) for x in page_items) or '<p>표시할 데이터가 없습니다.</p>'
             body = f"""
 <main class="shell">
@@ -491,6 +497,7 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
                 active="ssul",
                 site_url=site_url,
                 json_ld=build_json_ld(page_items, site_url, "posts"),
+                robots=page_robots,
             )
             (output / current_file).write_text(html_text, encoding="utf-8")
             written.append(current_file)
@@ -630,7 +637,9 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
 
     for page_no, page_items in enumerate(pages, start=1):
         current_file = list_page_name("lanovel", page_no)
-        canonical = f"/{current_file}"
+        is_paginated = page_no > 1
+        canonical = "/lanovel.html" if is_paginated else f"/{current_file}"
+        page_robots = "noindex,follow" if is_paginated else "index,follow,max-image-preview:large"
         cards = "\n".join(lanovel_card_html(x) for x in page_items) or '<p>표시할 데이터가 없습니다.</p>'
         body = f"""
 <main class="shell">
@@ -655,6 +664,7 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
             active="lanovel",
             site_url=site_url,
             json_ld=build_json_ld(page_items, site_url, "lanovel-posts"),
+            robots=page_robots,
         )
         (output / current_file).write_text(html_text, encoding="utf-8")
         written.append(current_file)
@@ -771,23 +781,29 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     return written
 
 
-def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[str]) -> None:
+def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[str], date_map: dict[str, str] | None = None) -> None:
     now = datetime.now(UTC).date().isoformat()
     urls = [f"{site_url}/" if p == "index.html" else f"{site_url}/{p}" for p in pages]
     xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    for u in urls:
+    for p, u in zip(pages, urls):
+        lastmod = (date_map or {}).get(p, now)[:10] if (date_map or {}).get(p) else now
         xml.append("  <url>")
         xml.append(f"    <loc>{u}</loc>")
-        xml.append(f"    <lastmod>{now}</lastmod>")
+        xml.append(f"    <lastmod>{lastmod}</lastmod>")
         xml.append("  </url>")
     xml.append("</urlset>")
     (output / filename).write_text("\n".join(xml), encoding="utf-8")
 
 
-def write_sitemap(output: Path, site_url: str, pages: list[str]) -> None:
+def write_sitemap(output: Path, site_url: str, pages: list[str], date_map: dict[str, str] | None = None) -> None:
     now = datetime.now(UTC).date().isoformat()
 
-    listing_pages = [p for p in pages if not p.startswith("posts/") and not p.startswith("lanovel-posts/")]
+    # Exclude paginated listing pages (page 2+) — they are noindex and waste crawl budget
+    listing_pages = [
+        p for p in pages
+        if not p.startswith("posts/") and not p.startswith("lanovel-posts/")
+        and "-page-" not in p
+    ]
     ssul_pages = [p for p in pages if p.startswith("posts/")]
     lanovel_pages = [p for p in pages if p.startswith("lanovel-posts/")]
 
@@ -796,10 +812,10 @@ def write_sitemap(output: Path, site_url: str, pages: list[str]) -> None:
         _write_sub_sitemap(output, "sitemap-listing.xml", site_url, listing_pages)
         subs.append("sitemap-listing.xml")
     if ssul_pages:
-        _write_sub_sitemap(output, "sitemap-ssul.xml", site_url, ssul_pages)
+        _write_sub_sitemap(output, "sitemap-ssul.xml", site_url, ssul_pages, date_map)
         subs.append("sitemap-ssul.xml")
     if lanovel_pages:
-        _write_sub_sitemap(output, "sitemap-lanovel.xml", site_url, lanovel_pages)
+        _write_sub_sitemap(output, "sitemap-lanovel.xml", site_url, lanovel_pages, date_map)
         subs.append("sitemap-lanovel.xml")
 
     idx = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
@@ -853,6 +869,19 @@ def main() -> None:
 
     copy_assets(out, Path(args.assets))
 
+    # Build date map: post path → actual publication date (for sitemap lastmod)
+    date_map: dict[str, str] = {}
+    for item in ssul_items:
+        pid = item.get("id", "")
+        pub = (item.get("published_at") or "")[:10]
+        if pid and pub:
+            date_map[f"posts/{pid}.html"] = pub
+    for item in lanovel_items:
+        pid = item.get("id", "")
+        pub = (item.get("published_at") or "")[:10]
+        if pid and pub:
+            date_map[f"lanovel-posts/{pid}.html"] = pub
+
     all_pages: list[str] = []
     all_pages.extend(write_home(out, ssul_items, lanovel_items, site_url))
     all_pages.extend(write_ssul_pages(out, ssul_items, site_url, max(1, args.per_page)))
@@ -861,7 +890,7 @@ def main() -> None:
     all_pages.extend(write_lanovel_pages(out, lanovel_items, site_url, max(1, args.lanovel_per_page)))
     all_pages.extend(write_lanovel_post_pages(out, lanovel_items, site_url))
 
-    write_sitemap(out, site_url, all_pages)
+    write_sitemap(out, site_url, all_pages, date_map)
     write_robots(out, site_url)
 
     print(f"built ssul={len(ssul_items)}, lanovel={len(lanovel_items)} to {out}")
