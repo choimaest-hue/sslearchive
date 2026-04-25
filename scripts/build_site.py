@@ -294,9 +294,9 @@ def ad_unit_html(label: str, min_height: int = 250) -> str:
 
 
 def sidebar_ads_html(two_units: bool = False) -> str:
-    units = [ad_unit_html("스폰서 광고", 280)]
+  units = [ad_unit_html("광고", 280)]
     if two_units:
-        units.append(ad_unit_html("스폰서 광고", 220))
+    units.append(ad_unit_html("광고", 220))
     return f'<aside class="sidebar ad-rail">{"".join(units)}</aside>'
 
 
