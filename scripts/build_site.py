@@ -109,16 +109,21 @@ def footer_html() -> str:
     return """
 <footer class="site-footer">
   <div class="footer-grid">
-    <section>
-      <h4>사이트 소개</h4>
-      <p>썰TV는 이야기형 콘텐츠를 주제별로 정리해 읽기 쉽게 제공하는 아카이브입니다.</p>
+    <section class="footer-brand-block">
+      <p class="eyebrow">Story archive</p>
+      <h4>썰TV 아카이브</h4>
+      <p>화제성 높은 썰과 라노벨 정보를 보기 좋게 큐레이션한 읽기 중심 콘텐츠 허브입니다.</p>
     </section>
     <section>
-      <h4>콘텐츠 주제</h4>
+      <h4>핵심 메뉴</h4>
       <p><a href="ssul.html">썰 아카이브</a> · <a href="lanovel.html">라노벨 아카이브</a></p>
     </section>
     <section>
-      <h4>광고 문의</h4>
+      <h4>카테고리</h4>
+      <p>군대 · 육아 · 연애/결혼 · 직장/사회 · 학교/학원 · 가족/친척 · 기타 화제</p>
+    </section>
+    <section>
+      <h4>운영/문의</h4>
       <p><a href="mailto:choimaest@naver.com">choimaest@naver.com</a></p>
     </section>
   </div>
@@ -126,9 +131,74 @@ def footer_html() -> str:
 """
 
 
+def plain_excerpt(text: str, fallback: str = "", limit: int = 140) -> str:
+    raw = re.sub(r"https?://\S+", "", text or "")
+    raw = re.sub(r"\s+", " ", raw).strip()
+    if not raw:
+        raw = (fallback or "").strip()
+    if not raw:
+        return "요약 정보가 없습니다."
+    if len(raw) > limit:
+        return raw[:limit].rstrip() + "..."
+    return raw
+
+
+def parse_date_safe(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat((value or "").strip())
+    except ValueError:
+        return datetime(1970, 1, 1)
+
+
+def feature_story_html(title: str, href: str, label: str, excerpt: str, meta_left: str, meta_right: str, tone: str = "warm") -> str:
+    return f"""
+<article class="feature-story feature-{tone}">
+  <div class="feature-topline">
+    <span class="eyebrow">{esc(label)}</span>
+    <span class="feature-kicker">{esc(meta_right)}</span>
+  </div>
+  <h2><a href="{href}">{esc(title)}</a></h2>
+  <p>{esc(excerpt)}</p>
+  <div class="feature-meta">
+    <span>{esc(meta_left)}</span>
+    <span>{esc(meta_right)}</span>
+  </div>
+  <a class="inline-link" href="{href}">콘텐츠 열기</a>
+</article>
+"""
+
+
+def story_tiles_html(items: list[dict[str, Any]], path_prefix: str, mode: str) -> str:
+    tiles: list[str] = []
+    for item in items:
+        pid = esc(item.get("id", ""))
+        title = esc(item.get("title", ""))
+        date = esc(item.get("published_at", ""))
+        meta = esc(item.get("category", "라노벨")) if mode == "ssul" else "라노벨"
+        tiles.append(
+            f'<a class="story-tile" href="{path_prefix}/{pid}.html">'
+            f'<span class="story-tile-meta">{meta} · {date}</span>'
+            f'<strong>{title}</strong>'
+            '</a>'
+        )
+    return "".join(tiles)
+
+
+def category_spotlight_html(counter: Counter) -> str:
+    cards: list[str] = []
+    for cat in CATEGORIES:
+        cards.append(
+            f'<a class="category-spotlight" href="category-{SLUG[cat]}.html">'
+            f'<span class="category-spotlight-name">{esc(cat.replace(" 썰", ""))}</span>'
+            f'<strong>{counter.get(cat, 0)}개</strong>'
+            '</a>'
+        )
+    return "".join(cards)
+
+
 def ssul_card_html(item: dict[str, Any]) -> str:
   title = esc(item.get("title", ""))
-  summary = esc(item.get("summary", ""))
+  summary = esc(plain_excerpt(item.get("summary") or item.get("body") or "", item.get("title", ""), 120))
   cat = esc(item.get("category", "기타"))
   pid = esc(item.get("id", ""))
   date = esc(item.get("published_at", ""))
@@ -136,6 +206,7 @@ def ssul_card_html(item: dict[str, Any]) -> str:
   source = esc(item.get("source_url", ""))
   return (
     f'<article class="card" data-category="{cat}">'
+    f'<span class="card-tag">{cat}</span>'
     f"<h3><a href=\"posts/{pid}.html\">{title}</a></h3>"
     f"<p>{summary}</p>"
     f'<div class="meta"><span>{cat}</span><span>{date} · 댓글 {comments}</span></div>'
@@ -160,6 +231,7 @@ def lanovel_card_html(item: dict[str, Any]) -> str:
   )
   return (
     '<article class="card card-compact">'
+    '<span class="card-tag">라노벨</span>'
     f"{thumb_html}"
     f"<h3><a href=\"lanovel-posts/{pid}.html\">{title}</a></h3>"
     f"<p class=\"preview-summary\">요약: {summary}</p>"
@@ -339,28 +411,92 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
 
 
 def write_home(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: list[dict[str, Any]], site_url: str) -> list[str]:
+    ssul_sorted = sorted(ssul_items, key=lambda item: parse_date_safe(str(item.get("published_at", ""))), reverse=True)
+    lanovel_sorted = sorted(lanovel_items, key=lambda item: parse_date_safe(str(item.get("published_at", ""))), reverse=True)
+    lead_ssul = ssul_sorted[0] if ssul_sorted else {}
+    lead_ln = lanovel_sorted[0] if lanovel_sorted else {}
+    counter = Counter([x.get("category", "기타") for x in ssul_items])
     body = f"""
 <main class="top-shell">
-  <section class="hero">
-    <h1>썰/라노벨 아카이브</h1>
-    <p class="subtitle">읽기 중심 UX로 구성한 2개 메인 주제형 아카이브</p>
-    <div class="badges">
-      <span class="badge">썰 {len(ssul_items)}개</span>
-      <span class="badge">라노벨 {len(lanovel_items)}개</span>
-      <span class="badge">페이지당 10개</span>
+  <section class="hero hero-shell">
+    <div class="hero-copy">
+      <p class="eyebrow">Editorial archive</p>
+      <h1>화제성 높은 썰과 라노벨을 한 번에 읽는 아카이브</h1>
+      <p class="subtitle">단순 나열이 아니라, 최신순 탐색과 카테고리 흐름이 보이도록 다시 정리한 스토리 허브입니다.</p>
+      <div class="hero-actions">
+        <a class="cta" href="ssul.html">썰 바로 보기</a>
+        <a class="cta ghost" href="lanovel.html">라노벨 보기</a>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><span>썰 데이터</span><strong>{len(ssul_items)}</strong></div>
+        <div class="stat-card"><span>라노벨 데이터</span><strong>{len(lanovel_items)}</strong></div>
+        <div class="stat-card"><span>카테고리</span><strong>{len(CATEGORIES)}</strong></div>
+      </div>
+    </div>
+    <div class="hero-stack">
+      {feature_story_html(
+          lead_ssul.get("title", "썰 아카이브"),
+          f"posts/{lead_ssul.get('id', '')}.html" if lead_ssul else "ssul.html",
+          "대표 썰",
+          plain_excerpt(lead_ssul.get("summary") or lead_ssul.get("body") or "", lead_ssul.get("title", ""), 150),
+          lead_ssul.get("category", "썰"),
+          lead_ssul.get("published_at", "최신"),
+          "warm",
+      )}
+      {feature_story_html(
+          lead_ln.get("title", "라노벨 아카이브"),
+          f"lanovel-posts/{lead_ln.get('id', '')}.html" if lead_ln else "lanovel.html",
+          "대표 라노벨",
+          plain_excerpt(lead_ln.get("summary") or lead_ln.get("excerpt") or lead_ln.get("content") or "", lead_ln.get("title", ""), 150),
+          "라노벨",
+          lead_ln.get("published_at", "최신"),
+          "cool",
+      )}
     </div>
   </section>
-  <section class="topic-grid">
+  <section class="category-band">
+    <div>
+      <p class="eyebrow">Categories</p>
+      <h2>주제별로 빠르게 이동</h2>
+    </div>
+    <div class="category-spotlight-grid">{category_spotlight_html(counter)}</div>
+  </section>
+  <section class="dashboard-grid">
+    <section class="dashboard-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Latest ssul</p>
+          <h2>최근 등록된 썰</h2>
+        </div>
+        <a class="inline-link" href="ssul.html">전체 보기</a>
+      </div>
+      <div class="story-tile-grid">{story_tiles_html(ssul_sorted[:6], 'posts', 'ssul')}</div>
+    </section>
+    <section class="dashboard-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Latest lanovel</p>
+          <h2>최근 라노벨 업데이트</h2>
+        </div>
+        <a class="inline-link" href="lanovel.html">전체 보기</a>
+      </div>
+      <div class="story-tile-grid">{story_tiles_html(lanovel_sorted[:6], 'lanovel-posts', 'lanovel')}</div>
+    </section>
+  </section>
+  <section class="topic-grid topic-grid-wide">
     <article class="topic-card">
+      <p class="eyebrow">Archive focus</p>
       <h3>썰 아카이브</h3>
-      <p>군대, 육아, 연애/결혼, 직장/사회 중심의 화제 썰 탐색</p>
+      <p>군대, 육아, 연애/결혼, 직장/사회 중심의 화제 썰을 긴 호흡으로 탐색하기 좋게 정리했습니다.</p>
       <a class="cta" href="ssul.html">썰 보러가기</a>
     </article>
     <article class="topic-card">
+      <p class="eyebrow">Archive focus</p>
       <h3>라노벨 아카이브</h3>
-      <p>라노벨 정보 카테고리 게시글 원문 기반 정리</p>
+      <p>원문 링크, 이미지, 요약을 함께 모아 라노벨 정보를 빠르게 훑을 수 있게 구성했습니다.</p>
       <a class="cta" href="lanovel.html">라노벨 보러가기</a>
     </article>
+    {sidebar_ads_html()}
   </section>
 </main>
 """
@@ -393,12 +529,17 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
         cards = "\n".join(ssul_card_html(x) for x in page_items) or '<p class="panel">표시할 데이터가 없습니다.</p>'
         body = f"""
 <main class="top-shell">
-  <section class="hero">
-    <h1>썰 아카이브</h1>
-    <p class="subtitle">카테고리별로 정리된 썰 데이터 목록</p>
-    <p class="subtitle">페이지 {page_no} / {len(pages)}</p>
+  <section class="hero list-hero">
+    <div>
+      <p class="eyebrow">Story archive</p>
+      <h1>썰 아카이브</h1>
+      <p class="subtitle">카테고리 흐름과 최신순 목록이 한눈에 보이도록 구성한 전체 아카이브 페이지입니다.</p>
+    </div>
+    <div class="hero-inline-stats">
+      <div class="stat-card"><span>전체 글</span><strong>{len(items)}</strong></div>
+      <div class="stat-card"><span>현재 페이지</span><strong>{page_no}/{len(pages)}</strong></div>
+    </div>
     <div class="badges">
-      <span class="badge">총 {len(items)}개</span>
       {badges_html}
     </div>
   </section>
@@ -406,7 +547,15 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
     {controls_html}
   </section>
   <section class="layout">
-    <div class="grid">{cards}</div>
+    <div class="content-column">
+      <div class="section-head compact">
+        <div>
+          <p class="eyebrow">Collection</p>
+          <h2>페이지 {page_no}의 썰 목록</h2>
+        </div>
+      </div>
+      <div class="grid">{cards}</div>
+    </div>
     {sidebar_ads_html(two_units=True)}
   </section>
   {pagination_html("ssul", page_no, len(pages))}
@@ -439,14 +588,20 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
             cards = "\n".join(ssul_card_html(x) for x in page_items) or '<p class="panel">표시할 데이터가 없습니다.</p>'
             body = f"""
 <main class="top-shell">
-  <section class="hero">
-    <h1>{esc(category)}</h1>
-    <p class="subtitle">총 {len(category_items)}개</p>
-    <p class="subtitle">페이지 {page_no} / {len(pages)}</p>
-    <p><a href="ssul.html">썰 전체 목록으로</a></p>
+  <section class="hero list-hero">
+    <div>
+      <p class="eyebrow">Category archive</p>
+      <h1>{esc(category)}</h1>
+      <p class="subtitle">카테고리 전용 흐름으로 탐색할 수 있는 정리 페이지입니다.</p>
+      <p><a class="inline-link" href="ssul.html">썰 전체 목록으로</a></p>
+    </div>
+    <div class="hero-inline-stats">
+      <div class="stat-card"><span>카테고리 글 수</span><strong>{len(category_items)}</strong></div>
+      <div class="stat-card"><span>페이지</span><strong>{page_no}/{len(pages)}</strong></div>
+    </div>
   </section>
   <section class="layout">
-    <div class="grid">{cards}</div>
+    <div class="content-column"><div class="grid">{cards}</div></div>
     {sidebar_ads_html()}
   </section>
   {pagination_html(f"category-{slug}", page_no, len(pages))}
@@ -571,16 +726,22 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
     </div>
   </header>
   <main class="top-shell">
-    <section class="hero">
+    <section class="hero reading-hero">
+      <p class="eyebrow">Story detail</p>
       <h1>{title}</h1>
       <p class="subtitle">{cat} · {date}</p>
-      <div class="nav-panel">
+      <div class="reading-meta-band">
+        <span class="badge">카테고리 {cat}</span>
+        <span class="badge">댓글 캡처 {len(capture_urls)}개</span>
+        <span class="badge">본문 {len(body)}자</span>
+      </div>
+      <div class="nav-panel quiet">
         <a href="../ssul.html" class="nav-btn secondary">← 목록으로</a>
-        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn">📖 원문 보기</a>
+        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn subtle">원문 보기</a>
       </div>
     </section>
     <section class="layout">
-      <article class="panel article-body">
+      <article class="panel article-body article-surface">
           {body_html}
           {capture_html}
       </article>
@@ -610,14 +771,20 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
         cards = "\n".join(lanovel_card_html(x) for x in page_items) or '<p class="panel">표시할 데이터가 없습니다.</p>'
         body = f"""
 <main class="top-shell">
-  <section class="hero">
-    <h1>라노벨 아카이브</h1>
-    <p class="subtitle">사용자 사이트 원문 기반 라노벨 정보 페이지</p>
-    <p class="subtitle">페이지 {page_no} / {len(pages)}</p>
-    <div class="badges"><span class="badge">총 {len(items)}개</span><span class="badge">페이지당 {per_page}개</span></div>
+  <section class="hero list-hero hero-cool">
+    <div>
+      <p class="eyebrow">Light novel feed</p>
+      <h1>라노벨 아카이브</h1>
+      <p class="subtitle">원작 링크, 대표 이미지, 요약을 함께 읽을 수 있는 라노벨 정리 피드입니다.</p>
+    </div>
+    <div class="hero-inline-stats">
+      <div class="stat-card"><span>전체 작품</span><strong>{len(items)}</strong></div>
+      <div class="stat-card"><span>페이지</span><strong>{page_no}/{len(pages)}</strong></div>
+    </div>
+    <div class="badges"><span class="badge">페이지당 {per_page}개</span></div>
   </section>
   <section class="layout">
-    <div class="grid lanovel-grid">{cards}</div>
+    <div class="content-column"><div class="grid lanovel-grid">{cards}</div></div>
     {sidebar_ads_html()}
   </section>
   {pagination_html("lanovel", page_no, len(pages))}
@@ -730,16 +897,22 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     </div>
   </header>
   <main class="top-shell">
-    <section class="hero">
+    <section class="hero reading-hero hero-cool">
+      <p class="eyebrow">Novel detail</p>
       <h1>{title}</h1>
       <p class="subtitle">{date}</p>
-      <div class="nav-panel">
+      <div class="reading-meta-band">
+        <span class="badge">라노벨</span>
+        <span class="badge">이미지 {len(image_urls)}개</span>
+        <span class="badge">원문 링크 제공</span>
+      </div>
+      <div class="nav-panel quiet">
         <a href="../lanovel.html" class="nav-btn secondary">← 라노벨 목록</a>
-        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn">📖 원문 페이지</a>
+        <a href="{source}" rel="nofollow noopener" target="_blank" class="nav-btn subtle">원문 페이지</a>
       </div>
     </section>
     <section class="layout">
-      <article class="panel article-body"><div class="article-top-link">{top_link}</div>{images_html}{content_html}</article>
+      <article class="panel article-body article-surface"><div class="article-top-link">{top_link}</div>{images_html}{content_html}</article>
       {sidebar_ads_html()}
     </section>
     {related_nav}
