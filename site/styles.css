@@ -642,31 +642,46 @@ img { max-width: 100%; display: block; }
   font-size: 1rem;
 }
 
-/* ─── Random Post Button ─────────────────────────── */
+/* ─── Random Post Buttons ───────────────────────── */
 
 @keyframes random-bob {
   0%, 100% { transform: translateY(0) rotate(-2deg); }
   50%       { transform: translateY(-6px) rotate(2deg); }
 }
 
-.random-post-btn {
+.random-btns {
   position: fixed;
-  bottom: 58px;
-  left: 18px;
+  bottom: 56px;
+  left: 16px;
   z-index: 200;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 10px;
+}
+
+.random-post-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
   text-decoration: none;
-  animation: random-bob 2.8s ease-in-out infinite;
   transition: transform 0.15s, filter 0.15s;
+}
+
+.random-ssul {
+  animation: random-bob 2.6s ease-in-out infinite;
+}
+
+.random-lanovel {
+  animation: random-bob 3.1s ease-in-out infinite;
+  animation-delay: -1.2s;
 }
 
 .random-post-btn:hover {
   animation-play-state: paused;
-  transform: scale(1.15) rotate(0deg);
+  transform: scale(1.18) rotate(0deg) !important;
   filter: drop-shadow(0 4px 12px rgba(192, 57, 43, 0.35));
 }
 
@@ -685,21 +700,35 @@ img { max-width: 100%; display: block; }
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
+.random-ssul .random-btn-icon {
+  border-color: #e8d8c4;
+  background: #fffaf5;
+}
+
+.random-lanovel .random-btn-icon {
+  border-color: #f0d6e8;
+  background: #fff5fb;
+}
+
 .random-post-btn:hover .random-btn-icon {
   border-color: var(--accent);
   box-shadow: 0 6px 20px rgba(192, 57, 43, 0.22);
 }
 
 .random-btn-label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 800;
   color: var(--muted);
-  letter-spacing: 0.04em;
-  background: rgba(255,255,255,0.9);
+  letter-spacing: 0.03em;
+  background: rgba(255,255,255,0.92);
   padding: 2px 7px;
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  white-space: nowrap;
 }
+
+.random-ssul .random-btn-label { color: #b37a40; }
+.random-lanovel .random-btn-label { color: #a0458c; }
 
 /* ─── Mobile/Web Toggle ───────────────────────────── */
 

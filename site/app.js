@@ -67,10 +67,12 @@
 
 // ─── Random Post ─────────────────────────────────────
 (() => {
-  const btn = document.getElementById('randomPostBtn');
-  if (!btn) return;
-  const indexUrl = btn.dataset.index || 'search-index.json';
+  const container = document.querySelector('.random-btns');
+  if (!container) return;
+  const indexUrl = container.dataset.index || 'search-index.json';
   const rootPrefix = indexUrl.replace('search-index.json', '');
+  const ssulBtn = document.getElementById('randomSsulBtn');
+  const lanovelBtn = document.getElementById('randomLanovelBtn');
 
   let cache = null;
 
@@ -83,19 +85,33 @@
     return cache;
   }
 
-  btn.addEventListener('click', async e => {
-    e.preventDefault();
-    const index = await getIndex();
-    if (!index.length) return;
-    const item = index[Math.floor(Math.random() * index.length)];
-    const path = item.T === 'l'
-      ? rootPrefix + 'lanovel-posts/' + item.i + '.html'
-      : rootPrefix + 'posts/' + item.i + '.html';
-    window.location.href = path;
-  });
+  function pickRandom(items) {
+    return items[Math.floor(Math.random() * items.length)];
+  }
 
-  // Pre-fetch on hover so navigation is instant
-  btn.addEventListener('mouseenter', () => getIndex(), { once: true });
+  if (ssulBtn) {
+    ssulBtn.addEventListener('click', async e => {
+      e.preventDefault();
+      const index = await getIndex();
+      const ssul = index.filter(x => x.T === 's');
+      if (!ssul.length) return;
+      const item = pickRandom(ssul);
+      window.location.href = rootPrefix + 'posts/' + item.i + '.html';
+    });
+    ssulBtn.addEventListener('mouseenter', () => getIndex(), { once: true });
+  }
+
+  if (lanovelBtn) {
+    lanovelBtn.addEventListener('click', async e => {
+      e.preventDefault();
+      const index = await getIndex();
+      const lanovel = index.filter(x => x.T === 'l');
+      if (!lanovel.length) return;
+      const item = pickRandom(lanovel);
+      window.location.href = rootPrefix + 'lanovel-posts/' + item.i + '.html';
+    });
+    lanovelBtn.addEventListener('mouseenter', () => getIndex(), { once: true });
+  }
 })();
 
 // ─── Search ──────────────────────────────────────────
