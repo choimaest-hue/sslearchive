@@ -30,6 +30,25 @@ SLUG = {
 DEFAULT_PER_PAGE = 10
 ADSENSE_CLIENT = "ca-pub-3397494907696633"
 ADSENSE_HOST = "ca-host-pub-9691043933427338"
+CONTACT_EMAIL = "choimaest@naver.com"
+MIN_INDEXABLE_TEXT_CHARS = 300
+FAVICON_HREF = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23c0392b'/%3E%3Ctext x='32' y='41' font-size='34' text-anchor='middle' fill='white' font-family='Arial,sans-serif'%3ES%3C/text%3E%3C/svg%3E"
+
+# Optional ad network hooks. Leave empty until each network issues real IDs.
+KAKAO_ADFIT_UNITS: dict[str, tuple[str, int, int]] = {}
+DABLE_SERVICE_NAME = ""
+DABLE_WIDGETS: dict[str, str] = {}
+
+CATEGORY_DESCRIPTIONS = {
+    "군대 썰": "군 생활, 훈련소, 예비군처럼 경험담 중심으로 읽을 수 있는 군대 썰 모음입니다.",
+    "육아 썰": "육아와 가족 일상에서 나온 고민, 경험담, 공감형 이야기를 모았습니다.",
+    "연애/결혼 썰": "연애, 결혼 준비, 부부와 가족 관계에서 나온 실제 고민형 이야기를 정리했습니다.",
+    "직장/사회 썰": "회사 생활, 인간관계, 사회생활에서 나온 사건과 경험담을 볼 수 있습니다.",
+    "학교/학원 썰": "학교와 학원 생활에서 생긴 이야기와 고민을 모은 카테고리입니다.",
+    "가족/친척 썰": "가족, 친척, 명절과 집안일을 둘러싼 이야기를 정리했습니다.",
+    "공포/사건 썰": "공포, 사건, 이상한 경험담처럼 긴장감 있는 썰을 모았습니다.",
+    "기타 화제 썰": "특정 카테고리로 묶기 어려운 화제성 이야기를 모았습니다.",
+}
 
 
 def esc(text: str) -> str:
@@ -126,7 +145,11 @@ def footer_html(prefix: str = "") -> str:
     <span>·</span>
     <a href="{p}lanovel.html">라노벨 아카이브</a>
     <span>·</span>
-    <a href="mailto:choimaest@naver.com">문의</a>
+    <a href="{p}about.html">소개</a>
+    <span>·</span>
+    <a href="{p}privacy.html">개인정보처리방침</a>
+    <span>·</span>
+    <a href="{p}contact.html">문의</a>
     <span>·</span>
     <span>© 2025 썰TV</span>
   </div>
@@ -144,6 +167,24 @@ def plain_excerpt(text: str, fallback: str = "", limit: int = 140) -> str:
     if len(raw) > limit:
         return raw[:limit].rstrip() + "..."
     return raw
+
+
+def content_text_len(*values: Any) -> int:
+    text = " ".join(str(value or "") for value in values)
+    return len(re.sub(r"\s+", "", text))
+
+
+def is_indexable_ssul(item: dict[str, Any]) -> bool:
+    return content_text_len(item.get("body"), item.get("summary")) >= MIN_INDEXABLE_TEXT_CHARS
+
+
+def is_indexable_lanovel(item: dict[str, Any]) -> bool:
+    return content_text_len(
+        item.get("content"),
+        item.get("summary"),
+        item.get("excerpt"),
+        item.get("synopsis"),
+    ) >= MIN_INDEXABLE_TEXT_CHARS
 
 
 def parse_date_safe(value: str) -> datetime:
@@ -313,9 +354,59 @@ def build_json_ld(items: list[dict[str, Any]], site_url: str, path_prefix: str) 
     return json.dumps(payload, ensure_ascii=False)
 
 
-def ad_unit_html(label: str, min_height: int = 250) -> str:
+def ad_scripts_html(include_ads: bool = True) -> str:
+    if not include_ads:
+        return ""
+
+    scripts: list[str] = []
+    if ADSENSE_CLIENT:
+        scripts.append(
+            f'<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}" crossorigin="anonymous"></script>'
+        )
+    if KAKAO_ADFIT_UNITS:
+        scripts.append('<script async src="https://t1.daumcdn.net/kas/static/ba.min.js"></script>')
+    if DABLE_SERVICE_NAME and DABLE_WIDGETS:
+        service = esc(DABLE_SERVICE_NAME)
+        scripts.append(
+            "<script>"
+            "(function(d,a,b,l,e,_){d[b]=d[b]||function(){(d[b].q=d[b].q||[]).push(arguments)};"
+            "e=a.createElement(l);e.async=1;e.charset='utf-8';e.src='https://static.dable.io/dist/plugin.min.js';"
+            "_=a.getElementsByTagName(l)[0];_.parentNode.insertBefore(e,_);})(window,document,'dable','script');"
+            f"dable('setService','{service}');dable('sendLogOnce');"
+            "</script>"
+        )
+    return "\n  ".join(scripts)
+
+
+def ad_unit_html(label: str, min_height: int = 250, placement: str = "sidebar") -> str:
+    kakao_unit = KAKAO_ADFIT_UNITS.get(placement)
+    if kakao_unit:
+        unit_id, width, height = kakao_unit
+        return f"""
+<div class="ad-unit ad-slot" data-ad-unit data-ad-state="pending" data-ad-provider="kakao" data-ad-placement="{esc(placement)}">
+  <div class="ad-slot-label">{esc(label)}</div>
+  <ins class="kakao_ad_area"
+       style="display:none;"
+       data-ad-unit="{esc(unit_id)}"
+       data-ad-width="{width}"
+       data-ad-height="{height}"></ins>
+</div>
+"""
+
+    dable_widget = DABLE_WIDGETS.get(placement)
+    if dable_widget:
+        return f"""
+<div class="ad-unit ad-slot native-ad-slot" data-ad-unit data-ad-state="pending" data-ad-provider="dable" data-ad-placement="{esc(placement)}">
+  <div class="ad-slot-label">{esc(label)}</div>
+  <div id="{esc(dable_widget)}"></div>
+</div>
+"""
+
+    if not ADSENSE_CLIENT:
+        return ""
+
     return f"""
-<div class="ad-slot">
+<div class="ad-unit ad-slot" data-ad-unit data-ad-state="pending" data-ad-provider="adsense" data-ad-placement="{esc(placement)}">
   <div class="ad-slot-label">{esc(label)}</div>
   <ins class="adsbygoogle"
        style="display:block; min-height:{min_height}px"
@@ -329,10 +420,11 @@ def ad_unit_html(label: str, min_height: int = 250) -> str:
 
 
 def sidebar_ads_html(two_units: bool = False) -> str:
-    units = [ad_unit_html("광고", 280)]
+    units = [ad_unit_html("광고", 280, "sidebar-top")]
     if two_units:
-        units.append(ad_unit_html("광고", 220))
-    return f'<aside class="ad-rail">{"".join(units)}</aside>'
+        units.append(ad_unit_html("광고", 220, "sidebar-bottom"))
+    units_html = "".join(unit for unit in units if unit)
+    return f'<aside class="ad-rail">{units_html}</aside>' if units_html else ""
 
 def category_widget_html(cat_counts: dict[str, int], active_cat: str | None = None, prefix: str = "") -> str:
     p = prefix + "/" if prefix else ""
@@ -360,71 +452,65 @@ def category_widget_html(cat_counts: dict[str, int], active_cat: str | None = No
 
 
 def sidebar_with_cats_html(cat_counts: dict[str, int], active_cat: str | None = None, two_units: bool = False, prefix: str = "") -> str:
-    units = [ad_unit_html("광고", 280)]
+    units = [ad_unit_html("광고", 280, "sidebar-top")]
     if two_units:
-        units.append(ad_unit_html("광고", 220))
-    units_html = "".join(units)
+        units.append(ad_unit_html("광고", 220, "sidebar-bottom"))
+    units_html = "".join(unit for unit in units if unit)
     cat_html = category_widget_html(cat_counts, active_cat, prefix)
     return f'<aside class="ad-rail">{cat_html}{units_html}</aside>'
 
+
 def reading_ad_html() -> str:
-    return f"""
-<div class="reading-ad">
-  <div class="ad-slot-label">광고</div>
-  <ins class="adsbygoogle"
-       style="display:block; min-height:200px"
-       data-ssletv-ad="true"
-       data-ad-host="{ADSENSE_HOST}"
-       data-ad-client="{ADSENSE_CLIENT}"
-       data-ad-format="auto"
-       data-full-width-responsive="true"></ins>
-</div>
-"""
+    unit = ad_unit_html("광고", 200, "article-bottom")
+    if not unit:
+        return ""
+    return unit.replace('class="ad-unit ad-slot"', 'class="ad-unit reading-ad"', 1)
 
 
-def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "", robots: str = "index,follow,max-image-preview:large") -> str:
+def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "", robots: str = "index,follow,max-image-preview:large", include_ads: bool = True) -> str:
     ld = f'<script type="application/ld+json">{json_ld}</script>' if json_ld else ""
+    ad_scripts = ad_scripts_html(include_ads)
     return f"""<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
-  <title>{esc(title)}</title>
-  <meta name="description" content="{esc(description)}" />
-  <link rel="canonical" href="{site_url}{canonical}" />
-  <meta name="robots" content="{robots}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="썰TV" />
-  <meta property="og:locale" content="ko_KR" />
-  <meta property="og:title" content="{esc(title)}" />
-  <meta property="og:description" content="{esc(description)}" />
-  <meta property="og:url" content="{site_url}{canonical}" />
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="{esc(title)}" />
-  <meta name="twitter:description" content="{esc(description)}" />
-  <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
-  <link rel="stylesheet" href="styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
-     crossorigin="anonymous"></script>
-  {ld}
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
+    <title>{esc(title)}</title>
+    <meta name="description" content="{esc(description)}" />
+    <link rel="canonical" href="{site_url}{canonical}" />
+    <meta name="robots" content="{robots}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="썰TV" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="{esc(title)}" />
+    <meta property="og:description" content="{esc(description)}" />
+    <meta property="og:url" content="{site_url}{canonical}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{esc(title)}" />
+    <meta name="twitter:description" content="{esc(description)}" />
+    <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    <link rel="icon" href="{FAVICON_HREF}" />
+    <link rel="stylesheet" href="styles.css" />
+    {ad_scripts}
+    {ld}
 </head>
 <body class="mode-web">
-  {header_html(active)}
-  {body}
-  {footer_html()}
-  <button id="mobileWebToggle" class="mobile-web-toggle" type="button">모바일로 보기</button>
-  <div class="random-btns" data-index="search-index.json">
-    <a id="randomSsulBtn" class="random-post-btn random-ssul" href="#" aria-label="랜덤 썰 보기">
-      <span class="random-btn-icon">📜</span>
-      <span class="random-btn-label">랜덤 썰</span>
-    </a>
-    <a id="randomLanovelBtn" class="random-post-btn random-lanovel" href="#" aria-label="랜덤 라노벨">
-      <span class="random-btn-icon">🌸</span>
-      <span class="random-btn-label">라노벨</span>
-    </a>
-  </div>
-  <script src="app.js"></script>
+    {header_html(active)}
+    {body}
+    {footer_html()}
+    <button id="mobileWebToggle" class="mobile-web-toggle" type="button">모바일로 보기</button>
+    <div class="random-btns" data-index="search-index.json">
+        <a id="randomSsulBtn" class="random-post-btn random-ssul" href="#" aria-label="랜덤 썰 보기">
+            <span class="random-btn-icon">📜</span>
+            <span class="random-btn-label">랜덤 썰</span>
+        </a>
+        <a id="randomLanovelBtn" class="random-post-btn random-lanovel" href="#" aria-label="랜덤 라노벨">
+            <span class="random-btn-icon">🌸</span>
+            <span class="random-btn-label">라노벨</span>
+        </a>
+    </div>
+    <script src="app.js"></script>
 </body>
 </html>
 """
@@ -448,6 +534,7 @@ def write_home(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: li
   <div class="cat-chips">{cat_chips}</div>
 </div>
 <main class="shell">
+    <p class="archive-note">썰TV는 흩어진 이야기를 주제별로 정리하고, 원문 출처와 읽기 쉬운 목록을 함께 제공하는 아카이브입니다.</p>
   <section class="home-section">
     <div class="sec-head">
       <h2>최신 썰</h2>
@@ -497,6 +584,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
   <div class="page-hero">
     <h1>썰 아카이브</h1>
     <p class="count">전체 {len(items)}개</p>
+    <p class="archive-note">카테고리별 경험담을 최신순으로 정리했습니다. 각 글은 원문 출처와 본문을 함께 확인할 수 있습니다.</p>
     <div class="cat-chips">{controls_html}</div>
   </div>
   <div class="layout">
@@ -535,13 +623,15 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
             current_file = list_page_name(f"category-{slug}", page_no)
             is_paginated = page_no > 1
             canonical = f"/category-{slug}.html" if is_paginated else f"/{current_file}"
-            page_robots = "noindex,follow" if is_paginated else "index,follow,max-image-preview:large"
+            page_robots = "noindex,follow" if is_paginated or not category_items else "index,follow,max-image-preview:large"
             cards = "\n".join(ssul_card_html(x) for x in page_items) or '<p>표시할 데이터가 없습니다.</p>'
+            category_desc = CATEGORY_DESCRIPTIONS.get(category, f"{category} 카테고리의 최신 글을 정리했습니다.")
             body = f"""
 <main class="shell">
   <div class="page-hero">
     <h1>{esc(category)}</h1>
     <p class="count">{len(category_items)}개 · <a href="ssul.html">전체 목록으로</a></p>
+    <p class="archive-note">{esc(category_desc)}</p>
   </div>
   <div class="layout">
     <div class="content-column">
@@ -563,7 +653,8 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
                 robots=page_robots,
             )
             (output / current_file).write_text(html_text, encoding="utf-8")
-            written.append(current_file)
+            if category_items:
+                written.append(current_file)
 
     return written
 
@@ -636,6 +727,9 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
             f'<a class="source-btn" href="{source}" rel="nofollow noopener" target="_blank">원문 보기 →</a>'
             if source else ""
         )
+        article_is_indexable = is_indexable_ssul(item)
+        article_robots = "index,follow,max-image-preview:large" if article_is_indexable else "noindex,follow"
+        ad_scripts = ad_scripts_html()
 
         page = f"""<!doctype html>
 <html lang="ko">
@@ -646,7 +740,7 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <title>{title} | 썰TV</title>
   <meta name="description" content="{description}" />
   <link rel="canonical" href="{site_url}/posts/{pid}.html" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="robots" content="{article_robots}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="썰TV" />
   <meta property="og:locale" content="ko_KR" />
@@ -658,9 +752,9 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{description}" />
   <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    <link rel="icon" href="{FAVICON_HREF}" />
   <link rel="stylesheet" href="../styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
-     crossorigin="anonymous"></script>
+    {ad_scripts}
   <script type="application/ld+json">{article_ld}</script>
 </head>
 <body class="mode-web">
@@ -699,7 +793,8 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
 </html>
 """
         (post_dir / f"{pid}.html").write_text(page, encoding="utf-8")
-        written.append(f"posts/{pid}.html")
+        if article_is_indexable:
+            written.append(f"posts/{pid}.html")
 
     return written
 
@@ -719,6 +814,7 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
   <div class="page-hero">
     <h1>라노벨 아카이브</h1>
     <p class="count">전체 {len(items)}개</p>
+    <p class="archive-note">작품별 원작 링크, 이미지, 요약 정보를 정리해 새 작품을 빠르게 탐색할 수 있게 구성했습니다.</p>
   </div>
   <div class="layout">
     <div class="content-column">
@@ -784,6 +880,9 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
             f'<a class="cta" href="{preview_url}" rel="nofollow noopener" target="_blank">원작 페이지 바로가기</a>'
             if preview_url else ""
         )
+        article_is_indexable = is_indexable_lanovel(item)
+        article_robots = "index,follow,max-image-preview:large" if article_is_indexable else "noindex,follow"
+        ad_scripts = ad_scripts_html()
 
         images_html = ""
         if image_urls:
@@ -806,7 +905,7 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <title>{title} | 라노벨 아카이브</title>
   <meta name="description" content="{ln_description}" />
   <link rel="canonical" href="{site_url}/lanovel-posts/{pid}.html" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta name="robots" content="{article_robots}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="썰TV" />
   <meta property="og:locale" content="ko_KR" />
@@ -818,9 +917,9 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{ln_description}" />
   <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    <link rel="icon" href="{FAVICON_HREF}" />
   <link rel="stylesheet" href="../styles.css" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={ADSENSE_CLIENT}"
-     crossorigin="anonymous"></script>
+    {ad_scripts}
   <script type="application/ld+json">{ln_article_ld}</script>
 </head>
 <body class="mode-web">
@@ -859,8 +958,74 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
 </html>
 """
         (post_dir / f"{pid}.html").write_text(page, encoding="utf-8")
-        written.append(f"lanovel-posts/{pid}.html")
+        if article_is_indexable:
+            written.append(f"lanovel-posts/{pid}.html")
 
+    return written
+
+
+def support_section_html(title: str, body: str) -> str:
+    return f"""
+<section class="policy-section">
+  <h2>{esc(title)}</h2>
+  <p>{esc(body)}</p>
+</section>
+"""
+
+
+def write_support_pages(output: Path, site_url: str) -> list[str]:
+    pages = {
+        "about.html": {
+            "title": "썰TV 소개",
+            "description": "썰TV 아카이브의 운영 목적, 콘텐츠 구성, 출처 표기 원칙 안내",
+            "body": "".join([
+                support_section_html("운영 목적", "썰TV는 온라인에서 흩어진 썰과 라노벨 정보를 주제별로 정리해 빠르게 탐색할 수 있도록 만든 아카이브입니다."),
+                support_section_html("콘텐츠 구성", "각 글은 제목, 카테고리, 발행일, 본문 또는 요약, 원문 링크를 중심으로 구성됩니다. 목록과 검색 인덱스는 사용자가 원하는 주제를 찾기 쉽도록 생성됩니다."),
+                support_section_html("출처와 문의", f"원문 확인이 필요한 글에는 출처 링크를 표시합니다. 정정, 삭제, 제휴 문의는 {CONTACT_EMAIL}로 연락할 수 있습니다."),
+            ]),
+        },
+        "privacy.html": {
+            "title": "개인정보처리방침",
+            "description": "썰TV의 개인정보 처리, 쿠키, 광고 파트너, 문의 방법 안내",
+            "body": "".join([
+                support_section_html("개인정보 수집", "썰TV는 정적 페이지 기반 사이트이며 회원가입, 댓글 작성, 결제 기능을 제공하지 않습니다. 사이트 자체에서 이름, 연락처, 계정 정보를 직접 수집하지 않습니다."),
+                support_section_html("쿠키와 광고", "Google AdSense, Kakao AdFit, Dable 같은 광고 또는 분석 파트너를 사용할 수 있으며, 해당 파트너는 광고 제공과 부정 사용 방지를 위해 쿠키나 유사 기술을 사용할 수 있습니다."),
+                support_section_html("외부 링크", "글 원문, 작품 페이지, 광고 링크처럼 외부 사이트로 이동하는 링크가 포함될 수 있습니다. 외부 사이트의 개인정보 처리 방식은 각 서비스의 정책을 따릅니다."),
+                support_section_html("문의", f"개인정보, 콘텐츠 정정, 광고 관련 문의는 {CONTACT_EMAIL} 메일로 연락해 주세요."),
+            ]),
+        },
+        "contact.html": {
+            "title": "문의",
+            "description": "썰TV 콘텐츠 정정, 삭제, 광고, 제휴 문의 안내",
+            "body": "".join([
+                support_section_html("연락처", f"콘텐츠 정정, 삭제, 광고, 제휴 문의는 {CONTACT_EMAIL} 메일로 연락해 주세요."),
+                support_section_html("요청 시 필요한 정보", "글 제목, 페이지 주소, 요청 사유를 함께 보내면 더 빠르게 확인할 수 있습니다."),
+            ]),
+        },
+    }
+
+    written: list[str] = []
+    for filename, page_info in pages.items():
+        body = f"""
+<main class="shell policy-page">
+  <div class="page-hero">
+    <h1>{esc(page_info["title"])}</h1>
+    <p class="archive-note">{esc(page_info["description"])}</p>
+  </div>
+  <div class="policy-content">{page_info["body"]}</div>
+</main>
+"""
+        html_text = wrap_page(
+            title=f"썰TV | {page_info['title']}",
+            description=page_info["description"],
+            canonical=f"/{filename}",
+            body=body,
+            active="",
+            site_url=site_url,
+            include_ads=False,
+        )
+        (output / filename).write_text(html_text, encoding="utf-8")
+        written.append(filename)
     return written
 
 
@@ -954,6 +1119,9 @@ def copy_assets(output: Path, assets_dir: Path) -> None:
     (output / "app.js").write_text((assets_dir / "app.js").read_text(encoding="utf-8"), encoding="utf-8")
     for gv in assets_dir.glob("google*.html"):
         (output / gv.name).write_text(gv.read_text(encoding="utf-8"), encoding="utf-8")
+    root_ads = Path("ads.txt")
+    if root_ads.exists():
+        (output / "ads.txt").write_text(root_ads.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def load_json(path: Path) -> list[dict[str, Any]]:
@@ -999,6 +1167,7 @@ def main() -> None:
 
     all_pages: list[str] = []
     all_pages.extend(write_home(out, ssul_items, lanovel_items, site_url))
+    all_pages.extend(write_support_pages(out, site_url))
     all_pages.extend(write_ssul_pages(out, ssul_items, site_url, max(1, args.per_page)))
     all_pages.extend(write_category_pages(out, ssul_items, site_url, max(1, args.per_page)))
     all_pages.extend(write_ssul_post_pages(out, ssul_items, site_url))

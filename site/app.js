@@ -4,25 +4,91 @@
 
   const STORAGE_KEY = "ssletv-view-mode";
   const MIN_AD_WIDTH = 180;
+  const AD_TIMEOUT_MS = 3800;
+
+  function setAdState(wrapper, state) {
+    if (!wrapper) return;
+    wrapper.dataset.adState = state;
+  }
+
+  function hasRenderedAd(wrapper, target) {
+    const status = target && target.getAttribute("data-ad-status");
+    if (status === "filled") return true;
+    if (wrapper.querySelector("iframe")) return true;
+    if (wrapper.dataset.adProvider !== "adsense") {
+      return Boolean(wrapper.querySelector("img, a")) || wrapper.textContent.trim().length > 12;
+    }
+    return false;
+  }
+
+  function watchAdUnit(wrapper, target) {
+    if (!wrapper || !target) return;
+    let finished = false;
+
+    const finish = state => {
+      if (finished) return;
+      finished = true;
+      setAdState(wrapper, state);
+    };
+
+    const inspect = () => {
+      const status = target.getAttribute("data-ad-status");
+      if (status === "unfilled") {
+        finish("empty");
+        return;
+      }
+      if (hasRenderedAd(wrapper, target)) {
+        finish("filled");
+      }
+    };
+
+    const observer = new MutationObserver(inspect);
+    observer.observe(target, { attributes: true, childList: true, subtree: true });
+
+    window.setTimeout(() => {
+      inspect();
+      if (!finished) finish("empty");
+      observer.disconnect();
+    }, AD_TIMEOUT_MS);
+  }
 
   function initAds() {
-    const adNodes = document.querySelectorAll('ins.adsbygoogle[data-ssletv-ad="true"]');
-    if (!adNodes.length || body.classList.contains("mode-mobile")) {
+    const adUnits = document.querySelectorAll("[data-ad-unit]");
+    if (!adUnits.length) {
       return;
     }
 
-    for (const adNode of adNodes) {
-      if (adNode.dataset.ssletvAdInit === "done") {
+    for (const wrapper of adUnits) {
+      if (wrapper.dataset.ssletvAdInit === "done") {
         continue;
       }
 
-      const slotWidth = adNode.offsetWidth;
+      const slotWidth = wrapper.getBoundingClientRect().width;
       if (slotWidth < MIN_AD_WIDTH) {
         continue;
       }
 
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-      adNode.dataset.ssletvAdInit = "done";
+      wrapper.dataset.ssletvAdInit = "done";
+      setAdState(wrapper, "pending");
+
+      const provider = wrapper.dataset.adProvider || "adsense";
+      if (provider === "adsense") {
+        const adNode = wrapper.querySelector('ins.adsbygoogle[data-ssletv-ad="true"]');
+        if (!adNode) {
+          setAdState(wrapper, "empty");
+          continue;
+        }
+        watchAdUnit(wrapper, adNode);
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (_) {
+          setAdState(wrapper, "empty");
+        }
+        continue;
+      }
+
+      const nativeTarget = wrapper.querySelector("ins, div[id]") || wrapper;
+      watchAdUnit(wrapper, nativeTarget);
     }
   }
 
