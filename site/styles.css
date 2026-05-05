@@ -1083,6 +1083,20 @@ img { max-width: 100%; display: block; }
 .random-ssul .random-btn-label { color: #9a6728; }
 .random-lanovel .random-btn-label { color: var(--teal); }
 
+.random-contact {
+  animation: random-bob 2.9s ease-in-out infinite;
+  animation-delay: -0.7s;
+}
+
+.random-contact .random-btn-icon {
+  border-color: #c8d8f0;
+  background: #f0f6ff;
+}
+
+.random-contact .random-btn-label {
+  color: #2455a0;
+}
+
 /* ─── Mobile/Web Toggle ───────────────────────────── */
 
 .mobile-web-toggle {

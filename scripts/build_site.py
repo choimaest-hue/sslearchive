@@ -887,6 +887,10 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
             <span class="random-btn-icon">🌸</span>
             <span class="random-btn-label">라노벨</span>
         </a>
+        <a class="random-post-btn random-contact" href="contact.html" aria-label="문의/후원">
+            <span class="random-btn-icon">💙</span>
+            <span class="random-btn-label">후원</span>
+        </a>
     </div>
     <script src="app.js?v={ASSET_VERSION}"></script>
 </body>
@@ -1189,6 +1193,10 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
       <span class="random-btn-icon">🌸</span>
       <span class="random-btn-label">라노벨</span>
     </a>
+    <a class="random-post-btn random-contact" href="../contact.html" aria-label="문의/후원">
+      <span class="random-btn-icon">💙</span>
+      <span class="random-btn-label">후원</span>
+    </a>
   </div>
     <script src="../app.js?v={ASSET_VERSION}"></script>
 </body>
@@ -1374,6 +1382,10 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
     <a id="randomLanovelBtn" class="random-post-btn random-lanovel" href="#" aria-label="랜덤 라노벨">
       <span class="random-btn-icon">🌸</span>
       <span class="random-btn-label">라노벨</span>
+    </a>
+    <a class="random-post-btn random-contact" href="../contact.html" aria-label="문의/후원">
+      <span class="random-btn-icon">💙</span>
+      <span class="random-btn-label">후원</span>
     </a>
   </div>
     <script src="../app.js?v={ASSET_VERSION}"></script>
