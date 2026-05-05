@@ -7,6 +7,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 CATEGORIES = [
   "군대 썰",
@@ -34,13 +35,18 @@ ORIGINAL_HOME_URL = "https://ssletv.com"
 ADSENSE_CLIENT = "ca-pub-3397494907696633"
 ADSENSE_HOST = "ca-host-pub-9691043933427338"
 CONTACT_EMAIL = "choimaest@naver.com"
+SUPPORT_EMAIL_SUBJECT = "[썰TV] 문의/후원 요청"
+SUPPORT_PLATFORMS: list[tuple[str, str]] = [
+    ("Buy Me a Coffee", "https://www.buymeacoffee.com/choimaest"),
+    ("Toss", "https://toss.me/choimaest"),
+]
 NAVER_SITE_VERIFICATION = "36275f7ef596c60eff1322aa781657cefd4a75f9"
 GOOGLE_SITE_VERIFICATION = "p1sOyazCjOMOi4Nt9AcF9jaIzoxvRR0FT0sgwoTxMRY"
 BING_SITE_VERIFICATION = ""
 MIN_INDEXABLE_TEXT_CHARS = 300
 FAVICON_HREF = "/favicon.ico"
 THEME_COLOR = "#b83b2f"
-ASSET_VERSION = "20260505-migrate"
+ASSET_VERSION = "20260505-support-refresh"
 FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SSUL TV">
     <rect x="2" y="2" width="60" height="60" rx="14" fill="#b83b2f"/>
     <path d="M15 19.5c0-4.1 3.3-7.5 7.5-7.5h19c4.1 0 7.5 3.4 7.5 7.5v18c0 4.1-3.4 7.5-7.5 7.5H31.4L21 53v-8h1.5c-4.2 0-7.5-3.4-7.5-7.5v-18Z" fill="#fff8ef"/>
@@ -228,18 +234,22 @@ def footer_html(prefix: str = "") -> str:
     <span>·</span>
     <a href="{p}lanovel.html">라노벨 아카이브</a>
     <span>·</span>
-    <a href="{p}sitemap.html">사이트맵</a>
-    <span>·</span>
-    <a href="{p}about.html">소개</a>
-    <span>·</span>
-    <a href="{p}privacy.html">개인정보처리방침</a>
-    <span>·</span>
-    <a href="{p}contact.html">문의</a>
+    <a href="{p}contact.html">문의/후원</a>
     <span>·</span>
     <span>© 2025 썰TV</span>
   </div>
 </footer>
 """
+
+
+def mailto_url(address: str, subject: str = "", body: str = "") -> str:
+    query: list[str] = []
+    if subject:
+        query.append(f"subject={quote(subject)}")
+    if body:
+        query.append(f"body={quote(body)}")
+    query_text = "&".join(query)
+    return f"mailto:{address}?{query_text}" if query_text else f"mailto:{address}"
 
 
 def plain_excerpt(text: str, fallback: str = "", limit: int = 140) -> str:
@@ -1401,33 +1411,36 @@ def support_section_html(title: str, body: str) -> str:
 """
 
 
+def support_links_section_html(title: str, links: list[tuple[str, str]], hint: str = "") -> str:
+        rows = "".join(
+                f'<a class="support-link-btn" href="{esc(url)}" target="_blank" rel="noopener noreferrer">{esc(name)}</a>'
+                for name, url in links
+        )
+        hint_html = f'<p class="support-link-hint">{esc(hint)}</p>' if hint else ""
+        return f"""
+<section class="policy-section">
+    <h2>{esc(title)}</h2>
+    <div class="support-links">{rows}</div>
+    {hint_html}
+</section>
+"""
+
+
 def write_support_pages(output: Path, site_url: str) -> list[str]:
+    inquiry_mail = mailto_url(
+        CONTACT_EMAIL,
+        SUPPORT_EMAIL_SUBJECT,
+        "요청 유형: (콘텐츠 정정/삭제, 제휴, 광고, 후원)\n페이지 주소: \n상세 내용: ",
+    )
     pages = {
-        "about.html": {
-            "title": "썰TV 소개",
-            "description": "썰TV 아카이브의 운영 목적, 콘텐츠 구성, 출처 표기 원칙 안내",
-            "body": "".join([
-                support_section_html("운영 목적", "썰TV는 온라인에서 흩어진 썰과 라노벨 정보를 주제별로 정리해 빠르게 탐색할 수 있도록 만든 아카이브입니다."),
-                support_section_html("콘텐츠 구성", "각 글은 제목, 카테고리, 발행일, 본문 또는 요약, 원문 링크를 중심으로 구성됩니다. 목록과 검색 인덱스는 사용자가 원하는 주제를 찾기 쉽도록 생성됩니다."),
-                support_section_html("출처와 문의", f"원문 확인이 필요한 글에는 출처 링크를 표시합니다. 정정, 삭제, 제휴 문의는 {CONTACT_EMAIL}로 연락할 수 있습니다."),
-            ]),
-        },
-        "privacy.html": {
-            "title": "개인정보처리방침",
-            "description": "썰TV의 개인정보 처리, 쿠키, 광고 파트너, 문의 방법 안내",
-            "body": "".join([
-                support_section_html("개인정보 수집", "썰TV는 정적 페이지 기반 사이트이며 회원가입, 댓글 작성, 결제 기능을 제공하지 않습니다. 사이트 자체에서 이름, 연락처, 계정 정보를 직접 수집하지 않습니다."),
-                support_section_html("쿠키와 광고", "Google AdSense, Kakao AdFit, Dable 같은 광고 또는 분석 파트너를 사용할 수 있으며, 해당 파트너는 광고 제공과 부정 사용 방지를 위해 쿠키나 유사 기술을 사용할 수 있습니다."),
-                support_section_html("외부 링크", "글 원문, 작품 페이지, 광고 링크처럼 외부 사이트로 이동하는 링크가 포함될 수 있습니다. 외부 사이트의 개인정보 처리 방식은 각 서비스의 정책을 따릅니다."),
-                support_section_html("문의", f"개인정보, 콘텐츠 정정, 광고 관련 문의는 {CONTACT_EMAIL} 메일로 연락해 주세요."),
-            ]),
-        },
         "contact.html": {
-            "title": "문의",
-            "description": "썰TV 콘텐츠 정정, 삭제, 광고, 제휴 문의 안내",
+            "title": "문의/후원",
+            "description": "썰TV 문의 메일과 후원 플랫폼 안내",
             "body": "".join([
-                support_section_html("연락처", f"콘텐츠 정정, 삭제, 광고, 제휴 문의는 {CONTACT_EMAIL} 메일로 연락해 주세요."),
+                support_links_section_html("문의 메일", [("메일 보내기", inquiry_mail)], f"수신 주소: {CONTACT_EMAIL}"),
+                support_links_section_html("후원 플랫폼", SUPPORT_PLATFORMS, "원하는 플랫폼에서 자유 금액으로 후원할 수 있습니다."),
                 support_section_html("요청 시 필요한 정보", "글 제목, 페이지 주소, 요청 사유를 함께 보내면 더 빠르게 확인할 수 있습니다."),
+                support_section_html("후원금 사용 안내", "후원금은 서버/도메인/이미지 최적화 비용, 신규 아카이브 정리 작업에 우선 사용됩니다."),
             ]),
         },
     }
@@ -1474,9 +1487,7 @@ def write_html_sitemap(output: Path, ssul_items: list[dict[str, Any]], lanovel_i
         sitemap_link("./", "홈", "최신 글 허브"),
         sitemap_link("ssul.html", "썰 아카이브", f"{len(ssul_items)}개"),
         sitemap_link("lanovel.html", "라노벨 아카이브", f"{len(lanovel_items)}개"),
-        sitemap_link("about.html", "소개", "운영 안내"),
-        sitemap_link("privacy.html", "개인정보처리방침", "광고/쿠키 안내"),
-        sitemap_link("contact.html", "문의", CONTACT_EMAIL),
+        sitemap_link("contact.html", "문의/후원", CONTACT_EMAIL),
     ])
     category_links = "".join(
         sitemap_link(f"category-{SLUG[cat]}.html", cat, f"{sum(1 for item in ssul_items if item.get('category') == cat)}개")
