@@ -45,7 +45,7 @@ BING_SITE_VERIFICATION = ""
 MIN_INDEXABLE_TEXT_CHARS = 300
 FAVICON_HREF = "/favicon.ico"
 THEME_COLOR = "#b83b2f"
-ASSET_VERSION = "20260505-support-refresh"
+ASSET_VERSION = "20260505-pwa-store"
 FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SSUL TV">
     <rect x="2" y="2" width="60" height="60" rx="14" fill="#b83b2f"/>
     <path d="M15 19.5c0-4.1 3.3-7.5 7.5-7.5h19c4.1 0 7.5 3.4 7.5 7.5v18c0 4.1-3.4 7.5-7.5 7.5H31.4L21 53v-8h1.5c-4.2 0-7.5-3.4-7.5-7.5v-18Z" fill="#fff8ef"/>
@@ -458,10 +458,10 @@ def shared_head_meta(site_url: str) -> str:
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="msapplication-TileColor" content="{THEME_COLOR}" />
+    <meta name="msapplication-TileImage" content="/assets/brand/icon-256.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" sizes="32x32" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/assets/brand/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/brand/apple-touch-icon.png" />
     <link rel="sitemap" type="application/xml" title="Sitemap" href="{site_url}/sitemap.xml" />
     <link rel="alternate" type="application/atom+xml" title="썰TV 최신 글" href="{site_url}/feed.xml" />
 """.strip()
@@ -480,40 +480,35 @@ def verification_meta_html() -> str:
 
 def site_manifest_json() -> str:
     payload = {
-        "name": "썰TV",
+        "name": "썰TV 아카이브",
         "short_name": "썰TV",
         "description": "썰과 라노벨을 주제별로 정리한 아카이브",
-        "id": "/",
+        "id": "/?source=pwa",
         "lang": "ko-KR",
-        "start_url": "/",
+        "dir": "ltr",
+        "start_url": "/?source=pwa",
         "scope": "/",
         "display": "standalone",
-        "display_override": ["standalone", "minimal-ui", "browser"],
+        "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
         "orientation": "portrait-primary",
         "background_color": "#f7f4ef",
         "theme_color": THEME_COLOR,
         "categories": ["entertainment", "books", "news"],
         "prefer_related_applications": False,
-        "related_applications": [],
+        "handle_links": "preferred",
+        "launch_handler": {"client_mode": ["navigate-existing", "auto"]},
+        "scope_extensions": [
+            {"origin": "https://sslearchive.vercel.app"},
+        ],
         "icons": [
-            {
-                "src": "/assets/brand/icon-192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any",
-            },
-            {
-                "src": "/assets/brand/icon-512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any",
-            },
-            {
-                "src": "/assets/brand/icon-maskable-512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable",
-            },
+            {"src": "/assets/brand/icon-96.png",            "sizes": "96x96",   "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-128.png",           "sizes": "128x128", "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-192.png",           "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-256.png",           "sizes": "256x256", "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-384.png",           "sizes": "384x384", "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-512.png",           "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/assets/brand/icon-maskable-192.png",  "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": "/assets/brand/icon-maskable-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
         "screenshots": [
             {
@@ -521,37 +516,34 @@ def site_manifest_json() -> str:
                 "sizes": "1366x768",
                 "type": "image/png",
                 "form_factor": "wide",
-                "label": "썰TV 라노벨 아카이브 데스크톱 화면",
+                "label": "썰TV 아카이브 — 데스크톱 홈 화면",
             },
             {
                 "src": "/assets/brand/screenshot-mobile.png",
                 "sizes": "390x844",
                 "type": "image/png",
                 "form_factor": "narrow",
-                "label": "썰TV 모바일 아카이브 화면",
+                "label": "썰TV 아카이브 — 모바일 홈 화면",
             },
         ],
         "shortcuts": [
             {
                 "name": "썰 아카이브",
                 "short_name": "썰",
-                "url": "/ssul.html",
+                "description": "경험담 썰 목록 보기",
+                "url": "/ssul.html?source=pwa-shortcut",
                 "icons": [{"src": "/assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png"}],
             },
             {
                 "name": "라노벨 아카이브",
                 "short_name": "라노벨",
-                "url": "/lanovel.html",
+                "description": "라노벨 작품 목록 보기",
+                "url": "/lanovel.html?source=pwa-shortcut",
                 "icons": [{"src": "/assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png"}],
             },
         ],
-        "serviceworker": {
-            "src": "/sw.js",
-            "scope": "/",
-            "use_cache": False,
-        },
     }
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def service_worker_js() -> str:
@@ -568,12 +560,12 @@ const CORE_ASSETS = [
     "/styles.css?v=__ASSET_VERSION__",
     "/app.js?v=__ASSET_VERSION__",
     "/site.webmanifest",
-    "/favicon.svg",
     "/favicon.ico",
     "/assets/brand/logo-mark.svg",
     "/assets/brand/icon-192.png",
     "/assets/brand/icon-512.png",
-    "/assets/brand/icon-maskable-512.png"
+    "/assets/brand/icon-maskable-512.png",
+    "/assets/brand/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", event => {
