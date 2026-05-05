@@ -4,7 +4,7 @@
 
   const STORAGE_KEY = "ssletv-view-mode";
   const MIN_AD_WIDTH = 180;
-  const AD_TIMEOUT_MS = 3800;
+  const AD_TIMEOUT_MS = 6500;
 
   function setAdState(wrapper, state) {
     if (!wrapper) return;
@@ -281,4 +281,22 @@
       }, 180);
     });
   }
+})();
+
+// PWA service worker
+(() => {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+    return;
+  }
+
+  function registerServiceWorker() {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  }
+
+  if (document.readyState === 'complete') {
+    registerServiceWorker();
+    return;
+  }
+
+  window.addEventListener('load', registerServiceWorker, { once: true });
 })();

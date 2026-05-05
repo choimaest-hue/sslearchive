@@ -2,6 +2,7 @@
 import html
 import json
 import re
+import shutil
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,14 +29,70 @@ SLUG = {
   "기타 화제 썰": "hot-issue",
 }
 DEFAULT_PER_PAGE = 10
+INDEX_SITE_URL = "https://sslearchive.vercel.app"
+ORIGINAL_HOME_URL = "https://ssletv.com"
 ADSENSE_CLIENT = "ca-pub-3397494907696633"
 ADSENSE_HOST = "ca-host-pub-9691043933427338"
 CONTACT_EMAIL = "choimaest@naver.com"
+NAVER_SITE_VERIFICATION = "36275f7ef596c60eff1322aa781657cefd4a75f9"
+GOOGLE_SITE_VERIFICATION = ""
+BING_SITE_VERIFICATION = ""
 MIN_INDEXABLE_TEXT_CHARS = 300
-FAVICON_HREF = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23c0392b'/%3E%3Ctext x='32' y='41' font-size='34' text-anchor='middle' fill='white' font-family='Arial,sans-serif'%3ES%3C/text%3E%3C/svg%3E"
+FAVICON_HREF = "/favicon.ico"
+THEME_COLOR = "#b83b2f"
+ASSET_VERSION = "20260505-migrate"
+FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SSUL TV">
+    <rect x="2" y="2" width="60" height="60" rx="14" fill="#b83b2f"/>
+    <path d="M15 19.5c0-4.1 3.3-7.5 7.5-7.5h19c4.1 0 7.5 3.4 7.5 7.5v18c0 4.1-3.4 7.5-7.5 7.5H31.4L21 53v-8h1.5c-4.2 0-7.5-3.4-7.5-7.5v-18Z" fill="#fff8ef"/>
+    <circle cx="45" cy="23" r="3.6" fill="#0f766e"/>
+    <path d="M22 47h20" stroke="#55231f" stroke-width="4" stroke-linecap="round"/>
+    <text x="32" y="35" text-anchor="middle" font-size="14" font-family="Arial, sans-serif" font-weight="800" fill="#231f20">SSUL</text>
+    <path d="M23 38h18" stroke="#d99a2b" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
+"""
 
 # Optional ad network hooks. Leave empty until each network issues real IDs.
-KAKAO_ADFIT_UNITS: dict[str, tuple[str, int, int]] = {}
+# Placements are intentionally conservative: one sidebar stack on desktop and
+# one in-content unit per major flow, so ads do not interrupt reading.
+AD_PLACEMENTS: dict[str, dict[str, Any]] = {
+    "home-between": {"label": "광고", "min_height": 120, "guide": "desktop 728x90, mobile 320x100"},
+    "list-bottom": {"label": "광고", "min_height": 180, "guide": "desktop 728x90, mobile 320x100"},
+    "sidebar-top": {"label": "광고", "min_height": 280, "guide": "desktop 300x250"},
+    "sidebar-bottom": {"label": "광고", "min_height": 220, "guide": "desktop 300x250"},
+    "article-bottom": {"label": "광고", "min_height": 200, "guide": "desktop 728x90 or 336x280, mobile 320x100"},
+}
+
+KakaoAdFitUnit = tuple[str, int, int]
+KakaoAdFitConfig = KakaoAdFitUnit | dict[str, KakaoAdFitUnit]
+
+# Fill after Kakao AdFit issues ad unit IDs. Each placement accepts either one
+# unit tuple or responsive variants, for example:
+# KAKAO_ADFIT_UNITS = {
+#     "article-bottom": {
+#         "mobile": ("DAN-mobile-id", 320, 100),
+#         "desktop": ("DAN-desktop-id", 728, 90),
+#     }
+# }
+KAKAO_ADFIT_UNITS: dict[str, KakaoAdFitConfig] = {
+    "article-bottom": {
+        "mobile": ("DAN-mPfvIl3pa0vJJRUK", 320, 100),
+        "desktop": ("DAN-ke8wRO46XvMZgO9u", 728, 90),
+    },
+    "home-between": {
+        "mobile": ("DAN-lEK4BOjuim0LpqjA", 320, 100),
+        "desktop": ("DAN-ZSurWK0FC4twnMmr", 728, 90),
+    },
+    "list-bottom": {
+        "mobile": ("DAN-qzYtmqpASnpWQVk2", 320, 100),
+        "desktop": ("DAN-P14WlRPblyaBAOkF", 728, 90),
+    },
+    "sidebar-top": ("DAN-wrgaVZq7SYXKI39L", 300, 250),
+    "sidebar-bottom": ("DAN-0SPT9pDIoMI6OPn0", 300, 250),
+}
+
+# Fill after AdSense display ad units are created. The value is data-ad-slot.
+# ADSENSE_UNITS = {"article-bottom": "1234567890"}
+ADSENSE_UNITS: dict[str, str] = {}
 DABLE_SERVICE_NAME = ""
 DABLE_WIDGETS: dict[str, str] = {}
 
@@ -53,6 +110,28 @@ CATEGORY_DESCRIPTIONS = {
 
 def esc(text: str) -> str:
     return html.escape(text or "", quote=True)
+
+
+def is_external_url(url: str) -> bool:
+    return url.startswith(("http://", "https://", "data:"))
+
+
+def media_src(url: str, prefix: str = "") -> str:
+    value = str(url or "").strip()
+    if not value or is_external_url(value):
+        return value
+    value = value.lstrip("/")
+    if value.startswith("../"):
+        return value
+    clean_prefix = prefix.strip("/")
+    return f"{clean_prefix}/{value}" if clean_prefix else value
+
+
+def media_abs(url: str, site_url: str) -> str:
+    value = str(url or "").strip()
+    if not value or is_external_url(value):
+        return value
+    return f"{site_url.rstrip('/')}/{value.lstrip('/')}"
 
 
 def ensure(path: Path) -> None:
@@ -102,11 +181,15 @@ def header_html(active: str, prefix: str = "") -> str:
     ssul_cls = "main-nav-link active" if active == "ssul" else "main-nav-link"
     lanovel_cls = "main-nav-link active" if active == "lanovel" else "main-nav-link"
     p = prefix + "/" if prefix else ""
+    home_href = "../" if prefix else "./"
     idx_path = f"{prefix}/search-index.json" if prefix else "search-index.json"
     return f"""
 <header class="site-header">
   <div class="site-header-inner">
-    <a href="{p}index.html" class="brand">썰TV</a>
+                <a href="{home_href}" class="brand" aria-label="썰TV 홈">
+                    <img src="/assets/brand/logo-mark.svg" class="brand-logo" width="30" height="30" alt="" aria-hidden="true" />
+                    <span>썰TV</span>
+                </a>
     <div class="header-actions">
       <nav class="main-nav" aria-label="메인 주제">
         <a href="{p}ssul.html" class="{ssul_cls}">썰 아카이브</a>
@@ -145,6 +228,8 @@ def footer_html(prefix: str = "") -> str:
     <span>·</span>
     <a href="{p}lanovel.html">라노벨 아카이브</a>
     <span>·</span>
+    <a href="{p}sitemap.html">사이트맵</a>
+    <span>·</span>
     <a href="{p}about.html">소개</a>
     <span>·</span>
     <a href="{p}privacy.html">개인정보처리방침</a>
@@ -167,6 +252,16 @@ def plain_excerpt(text: str, fallback: str = "", limit: int = 140) -> str:
     if len(raw) > limit:
         return raw[:limit].rstrip() + "..."
     return raw
+
+
+def atom_date(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat((value or "").strip())
+    except ValueError:
+        parsed = datetime.now(UTC)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def content_text_len(*values: Any) -> int:
@@ -218,10 +313,11 @@ def lanovel_card_html(item: dict[str, Any]) -> str:
     pid = esc(item.get("id", ""))
     date = esc(item.get("published_at", ""))
     summary = esc(lanovel_list_summary(item))
-    thumb = esc((item.get("image_urls") or [""])[0])
+    _raw_thumb = (item.get("image_urls") or [""])[0]
+    thumb = esc(media_src(_raw_thumb or "assets/lanovel/default-cover.webp"))  # fallback to default cover
     ncode_url = esc(item.get("ncode_url", ""))
 
-    thumb_html = f'<img class="lanovel-thumb" src="{thumb}" alt="{title}" loading="lazy" />' if thumb else ""
+    thumb_html = f'<img class="lanovel-thumb" src="{thumb}" alt="{title}" loading="lazy" />'
     ncode_html = (
         f'<p class="source-line"><a href="{ncode_url}" rel="nofollow noopener" target="_blank">원작 바로가기</a></p>'
         if ncode_url
@@ -335,6 +431,246 @@ def related_posts_nav(items: list[dict[str, Any]], current_id: str, limit: int =
     return nav_html
 
 
+def site_json_ld(site_url: str, *entities: dict[str, Any]) -> str:
+    organization_id = f"{site_url}/#organization"
+    website_id = f"{site_url}/#website"
+    graph: list[dict[str, Any]] = [
+        {
+            "@type": "Organization",
+            "@id": organization_id,
+            "name": "썰TV",
+            "url": site_url,
+            "logo": f"{site_url}/assets/brand/logo-512.png",
+        },
+        {
+            "@type": "WebSite",
+            "@id": website_id,
+            "name": "썰TV",
+            "url": site_url,
+            "inLanguage": "ko-KR",
+            "publisher": {"@id": organization_id},
+        },
+    ]
+    graph.extend(entity for entity in entities if entity)
+    return json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False, separators=(",", ":"))
+
+
+def shared_head_meta(site_url: str) -> str:
+    return f"""
+    <meta name="theme-color" content="{THEME_COLOR}" />
+    <meta name="application-name" content="썰TV" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="썰TV" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-TileColor" content="{THEME_COLOR}" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" sizes="32x32" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/assets/brand/icon-192.png" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="{site_url}/sitemap.xml" />
+    <link rel="alternate" type="application/atom+xml" title="썰TV 최신 글" href="{site_url}/feed.xml" />
+""".strip()
+
+
+def verification_meta_html() -> str:
+    metas: list[str] = []
+    if NAVER_SITE_VERIFICATION:
+        metas.append(f'<meta name="naver-site-verification" content="{esc(NAVER_SITE_VERIFICATION)}" />')
+    if GOOGLE_SITE_VERIFICATION:
+        metas.append(f'<meta name="google-site-verification" content="{esc(GOOGLE_SITE_VERIFICATION)}" />')
+    if BING_SITE_VERIFICATION:
+        metas.append(f'<meta name="msvalidate.01" content="{esc(BING_SITE_VERIFICATION)}" />')
+    return "\n    ".join(metas)
+
+
+def site_manifest_json() -> str:
+    payload = {
+        "name": "썰TV",
+        "short_name": "썰TV",
+        "description": "썰과 라노벨을 주제별로 정리한 아카이브",
+        "id": "/",
+        "lang": "ko-KR",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "display_override": ["standalone", "minimal-ui", "browser"],
+        "orientation": "portrait-primary",
+        "background_color": "#f7f4ef",
+        "theme_color": THEME_COLOR,
+        "categories": ["entertainment", "books", "news"],
+        "prefer_related_applications": False,
+        "related_applications": [],
+        "icons": [
+            {
+                "src": "/assets/brand/icon-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/assets/brand/icon-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": "/assets/brand/icon-maskable-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable",
+            },
+        ],
+        "screenshots": [
+            {
+                "src": "/assets/brand/screenshot-wide.png",
+                "sizes": "1366x768",
+                "type": "image/png",
+                "form_factor": "wide",
+                "label": "썰TV 라노벨 아카이브 데스크톱 화면",
+            },
+            {
+                "src": "/assets/brand/screenshot-mobile.png",
+                "sizes": "390x844",
+                "type": "image/png",
+                "form_factor": "narrow",
+                "label": "썰TV 모바일 아카이브 화면",
+            },
+        ],
+        "shortcuts": [
+            {
+                "name": "썰 아카이브",
+                "short_name": "썰",
+                "url": "/ssul.html",
+                "icons": [{"src": "/assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+            {
+                "name": "라노벨 아카이브",
+                "short_name": "라노벨",
+                "url": "/lanovel.html",
+                "icons": [{"src": "/assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png"}],
+            },
+        ],
+        "serviceworker": {
+            "src": "/sw.js",
+            "scope": "/",
+            "use_cache": False,
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def service_worker_js() -> str:
+        return """const SSLETV_CACHE_VERSION = "__ASSET_VERSION__";
+const CORE_CACHE = `ssletv-core-${SSLETV_CACHE_VERSION}`;
+const RUNTIME_CACHE = `ssletv-runtime-${SSLETV_CACHE_VERSION}`;
+const MAX_RUNTIME_ENTRIES = 90;
+
+const CORE_ASSETS = [
+    "/",
+    "/index.html",
+    "/ssul.html",
+    "/lanovel.html",
+    "/styles.css?v=__ASSET_VERSION__",
+    "/app.js?v=__ASSET_VERSION__",
+    "/site.webmanifest",
+    "/favicon.svg",
+    "/favicon.ico",
+    "/assets/brand/logo-mark.svg",
+    "/assets/brand/icon-192.png",
+    "/assets/brand/icon-512.png",
+    "/assets/brand/icon-maskable-512.png"
+];
+
+self.addEventListener("install", event => {
+    event.waitUntil(
+        caches.open(CORE_CACHE)
+            .then(cache => cache.addAll(CORE_ASSETS.map(url => new Request(url, { cache: "reload" }))))
+            .then(() => self.skipWaiting())
+    );
+});
+
+self.addEventListener("activate", event => {
+    event.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(keys
+                .filter(key => key.startsWith("ssletv-") && key !== CORE_CACHE && key !== RUNTIME_CACHE)
+                .map(key => caches.delete(key))))
+            .then(() => self.clients.claim())
+    );
+});
+
+async function trimRuntimeCache() {
+    const cache = await caches.open(RUNTIME_CACHE);
+    const keys = await cache.keys();
+    if (keys.length <= MAX_RUNTIME_ENTRIES) return;
+    await cache.delete(keys[0]);
+    return trimRuntimeCache();
+}
+
+async function networkFirst(request) {
+    const cache = await caches.open(RUNTIME_CACHE);
+    try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+            cache.put(request, response.clone());
+            trimRuntimeCache();
+        }
+        return response;
+    } catch (_) {
+        const cached = await caches.match(request);
+        return cached || caches.match("/index.html");
+    }
+}
+
+async function staleWhileRevalidate(request) {
+    const cache = await caches.open(RUNTIME_CACHE);
+    const cached = await cache.match(request);
+    const fetched = fetch(request).then(response => {
+        if (response && response.ok) {
+            cache.put(request, response.clone());
+            trimRuntimeCache();
+        }
+        return response;
+    }).catch(() => cached);
+    return cached || fetched;
+}
+
+self.addEventListener("fetch", event => {
+    const request = event.request;
+    if (request.method !== "GET") return;
+
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) return;
+
+    const acceptsHtml = request.headers.get("accept")?.includes("text/html");
+    if (request.mode === "navigate" || acceptsHtml) {
+        event.respondWith(networkFirst(request));
+        return;
+    }
+
+    if (["style", "script", "worker", "manifest", "image", "font"].includes(request.destination)) {
+        event.respondWith(staleWhileRevalidate(request));
+    }
+});
+""".replace("__ASSET_VERSION__", ASSET_VERSION)
+
+
+def breadcrumb_json_ld(site_url: str, crumbs: list[tuple[str, str]]) -> dict[str, Any]:
+    return {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": idx,
+                "name": name,
+                "item": f"{site_url}{path}",
+            }
+            for idx, (name, path) in enumerate(crumbs, start=1)
+        ],
+    }
+
+
 def build_json_ld(items: list[dict[str, Any]], site_url: str, path_prefix: str) -> str:
     elements = []
     for idx, item in enumerate(items[:20], start=1):
@@ -347,11 +683,10 @@ def build_json_ld(items: list[dict[str, Any]], site_url: str, path_prefix: str) 
             }
         )
     payload = {
-        "@context": "https://schema.org",
         "@type": "ItemList",
         "itemListElement": elements,
     }
-    return json.dumps(payload, ensure_ascii=False)
+    return site_json_ld(site_url, payload)
 
 
 def ad_scripts_html(include_ads: bool = True) -> str:
@@ -378,12 +713,50 @@ def ad_scripts_html(include_ads: bool = True) -> str:
     return "\n  ".join(scripts)
 
 
-def ad_unit_html(label: str, min_height: int = 250, placement: str = "sidebar") -> str:
-    kakao_unit = KAKAO_ADFIT_UNITS.get(placement)
-    if kakao_unit:
-        unit_id, width, height = kakao_unit
-        return f"""
-<div class="ad-unit ad-slot" data-ad-unit data-ad-state="pending" data-ad-provider="kakao" data-ad-placement="{esc(placement)}">
+def kakao_adfit_units_for(placement: str) -> list[tuple[str, str, int, int]]:
+    config = KAKAO_ADFIT_UNITS.get(placement)
+    if not config:
+        return []
+    if isinstance(config, tuple):
+        unit_id, width, height = config
+        return [("all", unit_id, width, height)]
+
+    units: list[tuple[str, str, int, int]] = []
+    seen: set[str] = set()
+    for variant in ("mobile", "desktop", "all"):
+        unit = config.get(variant)
+        if unit:
+            unit_id, width, height = unit
+            units.append((variant, unit_id, width, height))
+            seen.add(variant)
+    for variant, unit in config.items():
+        if variant in seen:
+            continue
+        unit_id, width, height = unit
+        units.append((variant, unit_id, width, height))
+    return units
+
+
+def ad_variant_class(variant: str) -> str:
+    if variant == "mobile":
+        return " ad-variant-mobile"
+    if variant == "desktop":
+        return " ad-variant-desktop"
+    return ""
+
+
+def ad_unit_html(label: str | None = None, min_height: int | None = None, placement: str = "sidebar") -> str:
+    policy = AD_PLACEMENTS.get(placement, {})
+    label = label or str(policy.get("label", "광고"))
+    min_height = int(min_height or policy.get("min_height", 250))
+    kakao_units = kakao_adfit_units_for(placement)
+    if kakao_units:
+        blocks = []
+        for variant, unit_id, width, height in kakao_units:
+            variant_class = ad_variant_class(variant)
+            variant_suffix = f":{variant}" if variant != "all" else ""
+            blocks.append(f"""
+<div class="ad-unit ad-slot{variant_class}" data-ad-unit data-ad-state="pending" data-ad-provider="kakao" data-ad-placement="{esc(placement + variant_suffix)}">
   <div class="ad-slot-label">{esc(label)}</div>
   <ins class="kakao_ad_area"
        style="display:none;"
@@ -391,7 +764,8 @@ def ad_unit_html(label: str, min_height: int = 250, placement: str = "sidebar") 
        data-ad-width="{width}"
        data-ad-height="{height}"></ins>
 </div>
-"""
+""")
+        return "".join(blocks)
 
     dable_widget = DABLE_WIDGETS.get(placement)
     if dable_widget:
@@ -402,7 +776,8 @@ def ad_unit_html(label: str, min_height: int = 250, placement: str = "sidebar") 
 </div>
 """
 
-    if not ADSENSE_CLIENT:
+    adsense_slot = ADSENSE_UNITS.get(placement)
+    if not ADSENSE_CLIENT or not adsense_slot:
         return ""
 
     return f"""
@@ -413,6 +788,7 @@ def ad_unit_html(label: str, min_height: int = 250, placement: str = "sidebar") 
        data-ssletv-ad="true"
        data-ad-host="{ADSENSE_HOST}"
        data-ad-client="{ADSENSE_CLIENT}"
+    data-ad-slot="{esc(adsense_slot)}"
        data-ad-format="auto"
        data-full-width-responsive="true"></ins>
 </div>
@@ -461,21 +837,27 @@ def sidebar_with_cats_html(cat_counts: dict[str, int], active_cat: str | None = 
 
 
 def reading_ad_html() -> str:
-    unit = ad_unit_html("광고", 200, "article-bottom")
+    unit = ad_unit_html(placement="article-bottom")
     if not unit:
         return ""
-    return unit.replace('class="ad-unit ad-slot"', 'class="ad-unit reading-ad"', 1)
+    return unit.replace('class="ad-unit ad-slot"', 'class="ad-unit ad-slot reading-ad"', 1)
+
+
+def content_ad_html(placement: str) -> str:
+    unit = ad_unit_html(placement=placement)
+    return f'<div class="content-ad-wrap">{unit}</div>' if unit else ""
 
 
 def wrap_page(title: str, description: str, canonical: str, body: str, active: str, site_url: str, json_ld: str = "", robots: str = "index,follow,max-image-preview:large", include_ads: bool = True) -> str:
-    ld = f'<script type="application/ld+json">{json_ld}</script>' if json_ld else ""
+    page_json_ld = json_ld or site_json_ld(site_url)
+    ld = f'<script type="application/ld+json">{page_json_ld}</script>'
     ad_scripts = ad_scripts_html(include_ads)
     return f"""<!doctype html>
 <html lang="ko">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
+    {verification_meta_html()}
     <title>{esc(title)}</title>
     <meta name="description" content="{esc(description)}" />
     <link rel="canonical" href="{site_url}{canonical}" />
@@ -490,8 +872,9 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
     <meta name="twitter:title" content="{esc(title)}" />
     <meta name="twitter:description" content="{esc(description)}" />
     <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    {shared_head_meta(site_url)}
     <link rel="icon" href="{FAVICON_HREF}" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v={ASSET_VERSION}" />
     {ad_scripts}
     {ld}
 </head>
@@ -510,7 +893,7 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
             <span class="random-btn-label">라노벨</span>
         </a>
     </div>
-    <script src="app.js"></script>
+    <script src="app.js?v={ASSET_VERSION}"></script>
 </body>
 </html>
 """
@@ -542,6 +925,7 @@ def write_home(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: li
     </div>
     <div class="post-grid">{ssul_cards}</div>
   </section>
+    {content_ad_html("home-between")}
   <section class="home-section">
     <div class="sec-head">
       <h2>최신 라노벨</h2>
@@ -591,6 +975,7 @@ def write_ssul_pages(output: Path, items: list[dict[str, Any]], site_url: str, p
     <div class="content-column">
       <div class="post-grid">{cards}</div>
       {pagination_html("ssul", page_no, len(pages))}
+            {content_ad_html("list-bottom")}
     </div>
     {sidebar_with_cats_html(cat_counts, active_cat=None, two_units=True)}
   </div>
@@ -637,8 +1022,9 @@ def write_category_pages(output: Path, items: list[dict[str, Any]], site_url: st
     <div class="content-column">
       <div class="post-grid">{cards}</div>
       {pagination_html(f"category-{slug}", page_no, len(pages))}
+            {content_ad_html("list-bottom")}
     </div>
-    {sidebar_with_cats_html(cat_counts, active_cat=category)}
+    {sidebar_with_cats_html(cat_counts, active_cat=category, two_units=True)}
   </div>
 </main>
 """
@@ -667,29 +1053,44 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
     for item in items:
         pid = esc(item.get("id", ""))
         title = esc(item.get("title", ""))
-        cat = esc(item.get("category", "기타"))
+        category_name = item.get("category", "기타")
+        category_slug = SLUG.get(category_name, "ssul")
+        cat = esc(category_name)
         body = item.get("body", "")
         capture_urls = item.get("comment_capture_urls") or []
         source = esc(item.get("source_url", ""))
         date = esc(item.get("published_at", ""))
+        modified_date = esc(item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""))
 
         raw_excerpt = re.sub(r'\s+', ' ', body).strip()[:160]
         description = esc(raw_excerpt) if raw_excerpt else title
-        og_image = esc(str(capture_urls[0])) if capture_urls else ""
+        og_image = esc(media_abs(str(capture_urls[0]), site_url)) if capture_urls else ""
 
         article_payload = {
-            "@context": "https://schema.org",
             "@type": "Article",
             "headline": item.get("title", ""),
             "description": raw_excerpt if raw_excerpt else item.get("title", ""),
             "url": f"{site_url}/posts/{item.get('id', '')}.html",
             "datePublished": item.get("published_at", ""),
-            "publisher": {"@type": "Organization", "name": "썰TV"},
+            "dateModified": item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""),
+            "author": {"@type": "Organization", "name": "썰TV"},
+            "publisher": {"@id": f"{site_url}/#organization"},
+            "inLanguage": "ko-KR",
+            "isAccessibleForFree": True,
             "mainEntityOfPage": {"@type": "WebPage", "@id": f"{site_url}/posts/{item.get('id', '')}.html"},
         }
         if capture_urls:
-            article_payload["image"] = str(capture_urls[0])
-        article_ld = json.dumps(article_payload, ensure_ascii=False)
+            article_payload["image"] = media_abs(str(capture_urls[0]), site_url)
+        breadcrumb_payload = breadcrumb_json_ld(
+            site_url,
+            [
+                ("홈", "/"),
+                ("썰 아카이브", "/ssul.html"),
+                (category_name, f"/category-{category_slug}.html"),
+                (item.get("title", ""), f"/posts/{item.get('id', '')}.html"),
+            ],
+        )
+        article_ld = site_json_ld(site_url, breadcrumb_payload, article_payload)
 
         related_nav = related_posts_nav(items, item.get("id", ""), limit=5)
 
@@ -709,12 +1110,12 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
         if capture_urls:
             cards_list: list[str] = []
             for idx, raw_url in enumerate(capture_urls, start=1):
-                safe_url = esc(str(raw_url))
+                safe_url = esc(media_src(str(raw_url), ".."))
                 cards_list.append(
-                    f'<a class="capture-item" href="{safe_url}" target="_blank" rel="nofollow noopener">'
+                    f'<figure class="capture-item">'
                     f'<img src="{safe_url}" loading="lazy" alt="댓글 캡처 {idx}" />'
-                    f'<span>댓글 캡처 {idx}</span>'
-                    "</a>"
+                    f'<figcaption>댓글 캡처 {idx}</figcaption>'
+                    "</figure>"
                 )
             capture_html = (
                 '<section class="comment-captures">'
@@ -730,17 +1131,21 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
         article_is_indexable = is_indexable_ssul(item)
         article_robots = "index,follow,max-image-preview:large" if article_is_indexable else "noindex,follow"
         ad_scripts = ad_scripts_html()
+        twitter_card = "summary_large_image" if og_image else "summary"
+        twitter_image = f'<meta name="twitter:image" content="{og_image}" />' if og_image else ""
 
         page = f"""<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
+    {verification_meta_html()}
   <title>{title} | 썰TV</title>
   <meta name="description" content="{description}" />
   <link rel="canonical" href="{site_url}/posts/{pid}.html" />
     <meta name="robots" content="{article_robots}" />
+    <meta property="article:published_time" content="{date}" />
+    <meta property="article:modified_time" content="{modified_date}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="썰TV" />
   <meta property="og:locale" content="ko_KR" />
@@ -748,12 +1153,14 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
   <meta property="og:description" content="{description}" />
   <meta property="og:url" content="{site_url}/posts/{pid}.html" />
   {f'<meta property="og:image" content="{og_image}" />' if og_image else ''}
-  <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="{twitter_card}" />
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{description}" />
+    {twitter_image}
   <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    {shared_head_meta(site_url)}
     <link rel="icon" href="{FAVICON_HREF}" />
-  <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="../styles.css?v={ASSET_VERSION}" />
     {ad_scripts}
   <script type="application/ld+json">{article_ld}</script>
 </head>
@@ -788,7 +1195,7 @@ def write_ssul_post_pages(output: Path, items: list[dict[str, Any]], site_url: s
       <span class="random-btn-label">라노벨</span>
     </a>
   </div>
-  <script src="../app.js"></script>
+    <script src="../app.js?v={ASSET_VERSION}"></script>
 </body>
 </html>
 """
@@ -820,8 +1227,9 @@ def write_lanovel_pages(output: Path, items: list[dict[str, Any]], site_url: str
     <div class="content-column">
       <div class="post-grid">{cards}</div>
       {pagination_html("lanovel", page_no, len(pages))}
+            {content_ad_html("list-bottom")}
     </div>
-    {sidebar_ads_html()}
+    {sidebar_ads_html(two_units=True)}
   </div>
 </main>
 """
@@ -850,29 +1258,43 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
         pid = esc(item.get("id", ""))
         title = esc(item.get("title", ""))
         date = esc(item.get("published_at", ""))
+        modified_date = esc(item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""))
         source = esc(item.get("source_url", ""))
         ncode_url = esc(item.get("ncode_url", ""))
         image_urls = item.get("image_urls") or []
         content_html = lanovel_content_html(item)
         preview_url = ncode_url or source
 
-        raw_synopsis = re.sub(r'\s+', ' ', item.get('synopsis', '') or '').strip()[:160]
+        raw_synopsis = re.sub(
+            r'\s+', ' ', item.get('excerpt', '') or item.get('synopsis', '') or item.get('content', '') or ''
+        ).strip()[:160]
         ln_description = esc(raw_synopsis) if raw_synopsis else title
-        ln_og_image = esc(str(image_urls[0])) if image_urls else ""
+        ln_og_image = esc(media_abs(str(image_urls[0]), site_url)) if image_urls else ""
 
         ln_article_payload = {
-            "@context": "https://schema.org",
             "@type": "Article",
             "headline": item.get("title", ""),
             "description": raw_synopsis if raw_synopsis else item.get("title", ""),
             "url": f"{site_url}/lanovel-posts/{item.get('id', '')}.html",
             "datePublished": item.get("published_at", ""),
-            "publisher": {"@type": "Organization", "name": "썰TV"},
+            "dateModified": item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""),
+            "author": {"@type": "Organization", "name": "썰TV"},
+            "publisher": {"@id": f"{site_url}/#organization"},
+            "inLanguage": "ko-KR",
+            "isAccessibleForFree": True,
             "mainEntityOfPage": {"@type": "WebPage", "@id": f"{site_url}/lanovel-posts/{item.get('id', '')}.html"},
         }
         if image_urls:
-            ln_article_payload["image"] = str(image_urls[0])
-        ln_article_ld = json.dumps(ln_article_payload, ensure_ascii=False)
+            ln_article_payload["image"] = media_abs(str(image_urls[0]), site_url)
+        ln_breadcrumb_payload = breadcrumb_json_ld(
+            site_url,
+            [
+                ("홈", "/"),
+                ("라노벨 아카이브", "/lanovel.html"),
+                (item.get("title", ""), f"/lanovel-posts/{item.get('id', '')}.html"),
+            ],
+        )
+        ln_article_ld = site_json_ld(site_url, ln_breadcrumb_payload, ln_article_payload)
 
         related_nav = related_posts_nav(items, item.get("id", ""), limit=5)
 
@@ -883,16 +1305,18 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
         article_is_indexable = is_indexable_lanovel(item)
         article_robots = "index,follow,max-image-preview:large" if article_is_indexable else "noindex,follow"
         ad_scripts = ad_scripts_html()
+        ln_twitter_card = "summary_large_image" if ln_og_image else "summary"
+        ln_twitter_image = f'<meta name="twitter:image" content="{ln_og_image}" />' if ln_og_image else ""
 
         images_html = ""
         if image_urls:
             image_items = []
-            for idx, raw_url in enumerate(image_urls[:12], start=1):
-                safe_url = esc(raw_url)
+            for idx, raw_url in enumerate(image_urls, start=1):
+                safe_url = esc(media_src(str(raw_url), ".."))
                 image_items.append(
-                    f'<a href="{safe_url}" target="_blank" rel="nofollow noopener">'
+                    f'<figure class="lanovel-image-item">'
                     f'<img src="{safe_url}" loading="lazy" alt="{title} 이미지 {idx}" />'
-                    "</a>"
+                    "</figure>"
                 )
             images_html = f'<section class="lanovel-images">{"".join(image_items)}</section>'
 
@@ -901,11 +1325,13 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="naver-site-verification" content="36275f7ef596c60eff1322aa781657cefd4a75f9" />
+    {verification_meta_html()}
   <title>{title} | 라노벨 아카이브</title>
   <meta name="description" content="{ln_description}" />
   <link rel="canonical" href="{site_url}/lanovel-posts/{pid}.html" />
     <meta name="robots" content="{article_robots}" />
+    <meta property="article:published_time" content="{date}" />
+    <meta property="article:modified_time" content="{modified_date}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="썰TV" />
   <meta property="og:locale" content="ko_KR" />
@@ -913,12 +1339,14 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
   <meta property="og:description" content="{ln_description}" />
   <meta property="og:url" content="{site_url}/lanovel-posts/{pid}.html" />
   {f'<meta property="og:image" content="{ln_og_image}" />' if ln_og_image else ''}
-  <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="{ln_twitter_card}" />
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{ln_description}" />
+    {ln_twitter_image}
   <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    {shared_head_meta(site_url)}
     <link rel="icon" href="{FAVICON_HREF}" />
-  <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="../styles.css?v={ASSET_VERSION}" />
     {ad_scripts}
   <script type="application/ld+json">{ln_article_ld}</script>
 </head>
@@ -953,7 +1381,7 @@ def write_lanovel_post_pages(output: Path, items: list[dict[str, Any]], site_url
       <span class="random-btn-label">라노벨</span>
     </a>
   </div>
-  <script src="../app.js"></script>
+    <script src="../app.js?v={ASSET_VERSION}"></script>
 </body>
 </html>
 """
@@ -1029,6 +1457,110 @@ def write_support_pages(output: Path, site_url: str) -> list[str]:
     return written
 
 
+def sitemap_link(path: str, title: str, meta: str = "") -> str:
+    meta_html = f'<span class="sitemap-link-meta">{esc(meta)}</span>' if meta else ""
+    return (
+        "<li>"
+        f'<a href="{esc(path)}">'
+        f'<span class="sitemap-link-title">{esc(title)}</span>'
+        f"{meta_html}"
+        "</a>"
+        "</li>"
+    )
+
+
+def write_html_sitemap(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: list[dict[str, Any]], site_url: str) -> list[str]:
+    main_links = "".join([
+        sitemap_link("./", "홈", "최신 글 허브"),
+        sitemap_link("ssul.html", "썰 아카이브", f"{len(ssul_items)}개"),
+        sitemap_link("lanovel.html", "라노벨 아카이브", f"{len(lanovel_items)}개"),
+        sitemap_link("about.html", "소개", "운영 안내"),
+        sitemap_link("privacy.html", "개인정보처리방침", "광고/쿠키 안내"),
+        sitemap_link("contact.html", "문의", CONTACT_EMAIL),
+    ])
+    category_links = "".join(
+        sitemap_link(f"category-{SLUG[cat]}.html", cat, f"{sum(1 for item in ssul_items if item.get('category') == cat)}개")
+        for cat in CATEGORIES
+    )
+
+    ssul_sections: list[str] = []
+    for category in CATEGORIES:
+        category_items = sorted(
+            [item for item in ssul_items if item.get("category") == category],
+            key=lambda item: parse_date_safe(str(item.get("published_at", ""))),
+            reverse=True,
+        )
+        links = "".join(
+            sitemap_link(
+                f'posts/{item.get("id", "")}.html',
+                str(item.get("title", "")),
+                str(item.get("published_at", ""))[:10],
+            )
+            for item in category_items
+            if item.get("id") and is_indexable_ssul(item)
+        )
+        if links:
+            ssul_sections.append(
+                f'<section class="sitemap-section"><h2>{esc(category)}</h2><ul class="sitemap-link-list">{links}</ul></section>'
+            )
+
+    lanovel_sorted = sorted(
+        lanovel_items,
+        key=lambda item: parse_date_safe(str(item.get("published_at", ""))),
+        reverse=True,
+    )
+    lanovel_links = "".join(
+        sitemap_link(
+            f'lanovel-posts/{item.get("id", "")}.html',
+            str(item.get("title", "")),
+            str(item.get("published_at", ""))[:10],
+        )
+        for item in lanovel_sorted
+        if item.get("id") and is_indexable_lanovel(item)
+    )
+
+    body = f"""
+<main class="shell sitemap-page">
+  <div class="page-hero">
+    <h1>사이트맵</h1>
+    <p class="archive-note">주요 목록, 카테고리, 색인 가능한 상세 글을 한 페이지에서 따라갈 수 있도록 정리했습니다.</p>
+  </div>
+  <section class="sitemap-section sitemap-overview">
+    <h2>주요 페이지</h2>
+    <ul class="sitemap-link-list sitemap-main-list">{main_links}</ul>
+  </section>
+  <section class="sitemap-section sitemap-overview">
+    <h2>썰 카테고리</h2>
+    <ul class="sitemap-link-list sitemap-main-list">{category_links}</ul>
+  </section>
+  <div class="sitemap-columns">
+    {''.join(ssul_sections)}
+    <section class="sitemap-section"><h2>라노벨 아카이브</h2><ul class="sitemap-link-list">{lanovel_links}</ul></section>
+  </div>
+</main>
+"""
+    sitemap_payload = {
+        "@type": "CollectionPage",
+        "name": "사이트맵",
+        "url": f"{site_url}/sitemap.html",
+        "description": "썰TV의 주요 페이지와 색인 가능한 글 링크 모음",
+        "inLanguage": "ko-KR",
+        "isPartOf": {"@id": f"{site_url}/#website"},
+    }
+    html_text = wrap_page(
+        title="썰TV | 사이트맵",
+        description="썰TV의 주요 페이지, 카테고리, 상세 글 링크를 정리한 HTML 사이트맵",
+        canonical="/sitemap.html",
+        body=body,
+        active="",
+        site_url=site_url,
+        json_ld=site_json_ld(site_url, breadcrumb_json_ld(site_url, [("홈", "/"), ("사이트맵", "/sitemap.html")]), sitemap_payload),
+        include_ads=False,
+    )
+    (output / "sitemap.html").write_text(html_text, encoding="utf-8")
+    return ["sitemap.html"]
+
+
 def write_search_index(output: Path, ssul_items: list[dict[str, Any]], lanovel_items: list[dict[str, Any]]) -> None:
     index = []
     for item in ssul_items:
@@ -1060,6 +1592,63 @@ def write_search_index(output: Path, ssul_items: list[dict[str, Any]], lanovel_i
     )
 
 
+def write_feed(output: Path, site_url: str, ssul_items: list[dict[str, Any]], lanovel_items: list[dict[str, Any]]) -> None:
+    feed_items: list[dict[str, str]] = []
+    for item in ssul_items:
+        title = str(item.get("title", ""))
+        pid = str(item.get("id", ""))
+        feed_items.append({
+            "title": title,
+            "url": f"{site_url}/posts/{pid}.html",
+            "id": f"{site_url}/posts/{pid}.html",
+            "updated": atom_date(str(item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""))),
+            "published": atom_date(str(item.get("published_at", ""))),
+            "summary": plain_excerpt(str(item.get("summary") or item.get("body") or ""), title, 180),
+            "category": str(item.get("category", "썰")),
+        })
+    for item in lanovel_items:
+        title = str(item.get("title", ""))
+        pid = str(item.get("id", ""))
+        feed_items.append({
+            "title": title,
+            "url": f"{site_url}/lanovel-posts/{pid}.html",
+            "id": f"{site_url}/lanovel-posts/{pid}.html",
+            "updated": atom_date(str(item.get("updated_at") or item.get("fetched_at") or item.get("published_at", ""))),
+            "published": atom_date(str(item.get("published_at", ""))),
+            "summary": lanovel_list_summary(item),
+            "category": "라노벨",
+        })
+
+    feed_items.sort(key=lambda entry: entry["published"], reverse=True)
+    latest_items = feed_items[:50]
+    feed_updated = latest_items[0]["updated"] if latest_items else atom_date("")
+
+    xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<feed xmlns="http://www.w3.org/2005/Atom">',
+        '  <title>썰TV 최신 글</title>',
+        f'  <link href="{site_url}/feed.xml" rel="self" type="application/atom+xml" />',
+        f'  <link href="{site_url}/" />',
+        f'  <id>{site_url}/</id>',
+        f'  <updated>{feed_updated}</updated>',
+        '  <author><name>썰TV</name></author>',
+    ]
+    for entry in latest_items:
+        xml.extend([
+            "  <entry>",
+            f'    <title>{esc(entry["title"])}</title>',
+            f'    <link href="{esc(entry["url"])}" />',
+            f'    <id>{esc(entry["id"])}</id>',
+            f'    <published>{entry["published"]}</published>',
+            f'    <updated>{entry["updated"]}</updated>',
+            f'    <category term="{esc(entry["category"])}" />',
+            f'    <summary>{esc(entry["summary"])}</summary>',
+            "  </entry>",
+        ])
+    xml.append("</feed>")
+    (output / "feed.xml").write_text("\n".join(xml), encoding="utf-8")
+
+
 def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[str], date_map: dict[str, str] | None = None) -> None:
     now = datetime.now(UTC).date().isoformat()
     urls = [f"{site_url}/" if p == "index.html" else f"{site_url}/{p}" for p in pages]
@@ -1069,9 +1658,33 @@ def _write_sub_sitemap(output: Path, filename: str, site_url: str, pages: list[s
         xml.append("  <url>")
         xml.append(f"    <loc>{u}</loc>")
         xml.append(f"    <lastmod>{lastmod}</lastmod>")
+        xml.append(f"    <changefreq>{sitemap_changefreq(p)}</changefreq>")
+        xml.append(f"    <priority>{sitemap_priority(p)}</priority>")
         xml.append("  </url>")
     xml.append("</urlset>")
     (output / filename).write_text("\n".join(xml), encoding="utf-8")
+
+
+def sitemap_changefreq(path: str) -> str:
+    if path in {"index.html", "ssul.html", "lanovel.html"}:
+        return "daily"
+    if path.startswith(("posts/", "lanovel-posts/")):
+        return "monthly"
+    return "weekly"
+
+
+def sitemap_priority(path: str) -> str:
+    if path == "index.html":
+        return "1.0"
+    if path in {"ssul.html", "lanovel.html"}:
+        return "0.9"
+    if path == "sitemap.html":
+        return "0.6"
+    if path.startswith(("posts/", "lanovel-posts/")):
+        return "0.8"
+    if path.startswith("category-"):
+        return "0.7"
+    return "0.5"
 
 
 def write_sitemap(output: Path, site_url: str, pages: list[str], date_map: dict[str, str] | None = None) -> None:
@@ -1117,8 +1730,20 @@ def write_robots(output: Path, site_url: str) -> None:
 def copy_assets(output: Path, assets_dir: Path) -> None:
     (output / "styles.css").write_text((assets_dir / "styles.css").read_text(encoding="utf-8"), encoding="utf-8")
     (output / "app.js").write_text((assets_dir / "app.js").read_text(encoding="utf-8"), encoding="utf-8")
+    (output / "favicon.svg").write_text(FAVICON_SVG, encoding="utf-8")
+    (output / "site.webmanifest").write_text(site_manifest_json(), encoding="utf-8")
+    (output / "sw.js").write_text(service_worker_js(), encoding="utf-8")
     for gv in assets_dir.glob("google*.html"):
         (output / gv.name).write_text(gv.read_text(encoding="utf-8"), encoding="utf-8")
+    media_dir = Path("assets")
+    if media_dir.exists():
+        target_media = output / "assets"
+        if target_media.exists():
+            shutil.rmtree(target_media)
+        shutil.copytree(media_dir, target_media)
+    favicon_ico = Path("assets/brand/favicon.ico")
+    if favicon_ico.exists():
+        shutil.copyfile(favicon_ico, output / "favicon.ico")
     root_ads = Path("ads.txt")
     if root_ads.exists():
         (output / "ads.txt").write_text(root_ads.read_text(encoding="utf-8"), encoding="utf-8")
@@ -1136,7 +1761,7 @@ def main() -> None:
     parser.add_argument("--lanovel-data", default="data/lanovel_posts.json")
     parser.add_argument("--assets", default="site")
     parser.add_argument("--out", default="dist")
-    parser.add_argument("--site-url", default="https://ssletv.com")
+    parser.add_argument("--site-url", default=INDEX_SITE_URL)
     parser.add_argument("--per-page", type=int, default=DEFAULT_PER_PAGE)
     parser.add_argument("--lanovel-per-page", type=int, default=6)
     args = parser.parse_args()
@@ -1151,6 +1776,7 @@ def main() -> None:
 
     copy_assets(out, Path(args.assets))
     write_search_index(out, ssul_items, lanovel_items)
+    write_feed(out, site_url, ssul_items, lanovel_items)
 
     # Build date map: post path → actual publication date (for sitemap lastmod)
     date_map: dict[str, str] = {}
@@ -1168,6 +1794,7 @@ def main() -> None:
     all_pages: list[str] = []
     all_pages.extend(write_home(out, ssul_items, lanovel_items, site_url))
     all_pages.extend(write_support_pages(out, site_url))
+    all_pages.extend(write_html_sitemap(out, ssul_items, lanovel_items, site_url))
     all_pages.extend(write_ssul_pages(out, ssul_items, site_url, max(1, args.per_page)))
     all_pages.extend(write_category_pages(out, ssul_items, site_url, max(1, args.per_page)))
     all_pages.extend(write_ssul_post_pages(out, ssul_items, site_url))

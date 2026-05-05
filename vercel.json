@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "python scripts/build_site.py --site-url https://ssletv.com --per-page 10 --lanovel-per-page 6",
+  "framework": null,
+  "buildCommand": null,
   "outputDirectory": "dist"
 }

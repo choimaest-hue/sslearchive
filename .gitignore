@@ -4,4 +4,5 @@ __pycache__/
 dist/
 *.log
 .vercel
+.vercel_python_packages/
 .env*.local
