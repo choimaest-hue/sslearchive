@@ -32,12 +32,11 @@ SLUG = {
 DEFAULT_PER_PAGE = 10
 INDEX_SITE_URL = "https://sslearchive.vercel.app"
 ORIGINAL_HOME_URL = "https://ssletv.com"
-ADSENSE_CLIENT = "ca-pub-3397494907696633"
-ADSENSE_HOST = "ca-host-pub-9691043933427338"
+ADSENSE_CLIENT = ""
+ADSENSE_HOST = ""
 CONTACT_EMAIL = "choimaest@naver.com"
 SUPPORT_EMAIL_SUBJECT = "[썰TV] 문의/후원 요청"
 SUPPORT_PLATFORMS: list[tuple[str, str]] = [
-    ("Buy Me a Coffee", "https://www.buymeacoffee.com/choimaest"),
     ("Toss", "https://toss.me/choimaest"),
 ]
 NAVER_SITE_VERIFICATION = "36275f7ef596c60eff1322aa781657cefd4a75f9"
@@ -79,22 +78,7 @@ KakaoAdFitConfig = KakaoAdFitUnit | dict[str, KakaoAdFitUnit]
 #         "desktop": ("DAN-desktop-id", 728, 90),
 #     }
 # }
-KAKAO_ADFIT_UNITS: dict[str, KakaoAdFitConfig] = {
-    "article-bottom": {
-        "mobile": ("DAN-mPfvIl3pa0vJJRUK", 320, 100),
-        "desktop": ("DAN-ke8wRO46XvMZgO9u", 728, 90),
-    },
-    "home-between": {
-        "mobile": ("DAN-lEK4BOjuim0LpqjA", 320, 100),
-        "desktop": ("DAN-ZSurWK0FC4twnMmr", 728, 90),
-    },
-    "list-bottom": {
-        "mobile": ("DAN-qzYtmqpASnpWQVk2", 320, 100),
-        "desktop": ("DAN-P14WlRPblyaBAOkF", 728, 90),
-    },
-    "sidebar-top": ("DAN-wrgaVZq7SYXKI39L", 300, 250),
-    "sidebar-bottom": ("DAN-0SPT9pDIoMI6OPn0", 300, 250),
-}
+KAKAO_ADFIT_UNITS: dict[str, KakaoAdFitConfig] = {}
 
 # Fill after AdSense display ad units are created. The value is data-ad-slot.
 # ADSENSE_UNITS = {"article-bottom": "1234567890"}
@@ -862,6 +846,7 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
     page_json_ld = json_ld or site_json_ld(site_url)
     ld = f'<script type="application/ld+json">{page_json_ld}</script>'
     ad_scripts = ad_scripts_html(include_ads)
+    adsense_meta = f'<meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />' if ADSENSE_CLIENT else ""
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -881,7 +866,7 @@ def wrap_page(title: str, description: str, canonical: str, body: str, active: s
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="{esc(title)}" />
     <meta name="twitter:description" content="{esc(description)}" />
-    <meta name="google-adsense-account" content="{ADSENSE_CLIENT}" />
+    {adsense_meta}
     {shared_head_meta(site_url)}
     <link rel="icon" href="{FAVICON_HREF}" />
     <link rel="stylesheet" href="styles.css?v={ASSET_VERSION}" />
