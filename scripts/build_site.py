@@ -1411,6 +1411,18 @@ def support_links_section_html(title: str, links: list[tuple[str, str]], hint: s
 """
 
 
+def toss_qr_section_html() -> str:
+    return """
+<section class="policy-section">
+    <h2>후원 (토스)</h2>
+    <div class="support-qr">
+        <img src="/assets/brand/toss-qr.png" alt="토스 후원 QR 코드" width="200" height="200" loading="lazy" />
+        <p class="support-qr-hint">토스 앱으로 QR을 스캔해 후원할 수 있습니다</p>
+    </div>
+</section>
+"""
+
+
 def write_support_pages(output: Path, site_url: str) -> list[str]:
     inquiry_mail = mailto_url(
         CONTACT_EMAIL,
@@ -1423,7 +1435,7 @@ def write_support_pages(output: Path, site_url: str) -> list[str]:
             "description": "썰TV 문의 메일과 후원 플랫폼 안내",
             "body": "".join([
                 support_links_section_html("문의 메일", [("메일 보내기", inquiry_mail)], f"수신 주소: {CONTACT_EMAIL}"),
-                support_links_section_html("후원 플랫폼", SUPPORT_PLATFORMS, "원하는 플랫폼에서 자유 금액으로 후원할 수 있습니다."),
+                toss_qr_section_html(),
                 support_section_html("요청 시 필요한 정보", "글 제목, 페이지 주소, 요청 사유를 함께 보내면 더 빠르게 확인할 수 있습니다."),
                 support_section_html("후원금 사용 안내", "후원금은 서버/도메인/이미지 최적화 비용, 신규 아카이브 정리 작업에 우선 사용됩니다."),
             ]),
