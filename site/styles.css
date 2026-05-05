@@ -786,6 +786,62 @@ img { max-width: 100%; display: block; }
   margin: 0;
 }
 
+.support-account-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.support-account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.support-bank-name {
+  font-size: 0.82rem;
+  color: var(--ink-sub);
+  margin: 0;
+}
+
+.support-account-number {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0;
+  color: var(--ink);
+}
+
+.support-account-holder {
+  font-size: 0.88rem;
+  color: var(--ink-sub);
+  margin: 0 0 10px;
+}
+
+.support-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.support-toss-btn {
+  background: #0064ff;
+  color: #fff !important;
+  border-color: #0064ff !important;
+}
+
+.support-toss-btn:hover {
+  background: #004fd4;
+  border-color: #004fd4 !important;
+}
+
+.support-copy-btn {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
 /* ─── HTML Sitemap ─────────────────────────────── */
 
 .sitemap-page {

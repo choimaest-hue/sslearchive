@@ -1411,13 +1411,30 @@ def support_links_section_html(title: str, links: list[tuple[str, str]], hint: s
 """
 
 
-def toss_qr_section_html() -> str:
-    return """
+DONATE_BANK      = "웰컴저축은행"
+DONATE_ACCOUNT   = "06601213519539"
+DONATE_HOLDER    = "최**"
+# supertoss deeplink for 웰컴저축은행
+DONATE_TOSS_LINK = "supertoss://send?amount=0&bank=%EC%9B%B0%EC%BB%B4%EC%A0%80%EC%B6%95%EC%9D%80%ED%96%89&accountNo=06601213519539"
+
+
+def support_account_section_html() -> str:
+    return f"""
 <section class="policy-section">
-    <h2>후원 (토스)</h2>
-    <div class="support-qr">
-        <img src="/assets/brand/toss-qr.png" alt="토스 후원 QR 코드" width="200" height="200" loading="lazy" />
-        <p class="support-qr-hint">토스 앱으로 QR을 스캔해 후원할 수 있습니다</p>
+    <h2>후원</h2>
+    <div class="support-account-block">
+        <div class="support-qr">
+            <img src="/assets/brand/toss-qr.png" alt="토스 후원 QR 코드" width="180" height="180" loading="lazy" />
+        </div>
+        <div class="support-account-info">
+            <p class="support-bank-name">{esc(DONATE_BANK)}</p>
+            <p class="support-account-number">{esc(DONATE_ACCOUNT)}</p>
+            <p class="support-account-holder">{esc(DONATE_HOLDER)}</p>
+            <div class="support-account-actions">
+                <a class="support-link-btn support-toss-btn" href="{esc(DONATE_TOSS_LINK)}">토스로 송금</a>
+                <button class="support-link-btn support-copy-btn" type="button" data-copy="{esc(DONATE_ACCOUNT)}" onclick="(function(btn){{navigator.clipboard.writeText(btn.dataset.copy).then(function(){{var t=btn.textContent;btn.textContent='복사됨!';setTimeout(function(){{btn.textContent=t;}},1500);}})}})(this)">계좌번호 복사</button>
+            </div>
+        </div>
     </div>
 </section>
 """
@@ -1432,12 +1449,10 @@ def write_support_pages(output: Path, site_url: str) -> list[str]:
     pages = {
         "contact.html": {
             "title": "문의/후원",
-            "description": "썰TV 문의 메일과 후원 플랫폼 안내",
+            "description": "썰TV 문의 및 후원 안내",
             "body": "".join([
                 support_links_section_html("문의 메일", [("메일 보내기", inquiry_mail)], f"수신 주소: {CONTACT_EMAIL}"),
-                toss_qr_section_html(),
-                support_section_html("요청 시 필요한 정보", "글 제목, 페이지 주소, 요청 사유를 함께 보내면 더 빠르게 확인할 수 있습니다."),
-                support_section_html("후원금 사용 안내", "후원금은 서버/도메인/이미지 최적화 비용, 신규 아카이브 정리 작업에 우선 사용됩니다."),
+                support_account_section_html(),
             ]),
         },
     }
