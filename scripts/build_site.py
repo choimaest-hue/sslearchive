@@ -1414,26 +1414,51 @@ def support_links_section_html(title: str, links: list[tuple[str, str]], hint: s
 DONATE_BANK      = "웰컴저축은행"
 DONATE_ACCOUNT   = "06601213519539"
 DONATE_HOLDER    = "최**"
-# supertoss deeplink for 웰컴저축은행
+# 경남은행 QR (supertoss deeplink encoded in the QR image)
+DONATE_QR_TOSS_LINK = "supertoss://send?amount=0&bank=%EA%B2%BD%EB%82%A8%EC%9D%80%ED%96%89&accountNo=2070148474400&origin=qr"
+# 웰컴저축은행 direct transfer link
 DONATE_TOSS_LINK = "supertoss://send?amount=0&bank=%EC%9B%B0%EC%BB%B4%EC%A0%80%EC%B6%95%EC%9D%80%ED%96%89&accountNo=06601213519539"
 
 
-def support_account_section_html() -> str:
+def contact_cta_row_html(mail_url: str) -> str:
+    return f"""
+<div class="contact-cta-row">
+  <a class="contact-cta-btn contact-cta-btn--donate" href="{esc(DONATE_QR_TOSS_LINK)}">💙 토스로 후원</a>
+  <a class="contact-cta-btn contact-cta-btn--mail" href="{esc(mail_url)}">✉️ 문의 메일 보내기</a>
+</div>
+"""
+
+
+def support_qr_section_html() -> str:
     return f"""
 <section class="policy-section">
-    <h2>후원</h2>
+    <h2>후원 QR</h2>
     <div class="support-account-block">
         <div class="support-qr">
             <img src="/assets/brand/toss-qr.png" alt="토스 후원 QR 코드" width="180" height="180" loading="lazy" />
         </div>
         <div class="support-account-info">
-            <p class="support-bank-name">{esc(DONATE_BANK)}</p>
-            <p class="support-account-number">{esc(DONATE_ACCOUNT)}</p>
-            <p class="support-account-holder">{esc(DONATE_HOLDER)}</p>
-            <div class="support-account-actions">
-                <a class="support-link-btn support-toss-btn" href="{esc(DONATE_TOSS_LINK)}">토스로 송금</a>
-                <button class="support-link-btn support-copy-btn" type="button" data-copy="{esc(DONATE_ACCOUNT)}" onclick="(function(btn){{navigator.clipboard.writeText(btn.dataset.copy).then(function(){{var t=btn.textContent;btn.textContent='복사됨!';setTimeout(function(){{btn.textContent=t;}},1500);}})}})(this)">계좌번호 복사</button>
+            <p class="support-bank-name" style="margin-top:4px">토스 앱으로 스캔하거나 아래 버튼으로 바로 송금하세요</p>
+            <div class="support-account-actions" style="margin-top:8px">
+                <a class="support-link-btn support-toss-btn" href="{esc(DONATE_QR_TOSS_LINK)}">토스로 송금</a>
             </div>
+        </div>
+    </div>
+</section>
+"""
+
+
+def support_account_section_html() -> str:
+    return f"""
+<section class="policy-section">
+    <h2>계좌 직접 입금</h2>
+    <div class="support-account-info">
+        <p class="support-bank-name">{esc(DONATE_BANK)}</p>
+        <p class="support-account-number">{esc(DONATE_ACCOUNT)}</p>
+        <p class="support-account-holder">{esc(DONATE_HOLDER)}</p>
+        <div class="support-account-actions">
+            <a class="support-link-btn support-toss-btn" href="{esc(DONATE_TOSS_LINK)}">토스로 송금</a>
+            <button class="support-link-btn support-copy-btn" type="button" data-copy="{esc(DONATE_ACCOUNT)}" onclick="(function(btn){{navigator.clipboard.writeText(btn.dataset.copy).then(function(){{var t=btn.textContent;btn.textContent='복사됨!';setTimeout(function(){{btn.textContent=t;}},1500);}})}})(this)">계좌번호 복사</button>
         </div>
     </div>
 </section>
@@ -1451,7 +1476,8 @@ def write_support_pages(output: Path, site_url: str) -> list[str]:
             "title": "문의/후원",
             "description": "썰TV 문의 및 후원 안내",
             "body": "".join([
-                support_links_section_html("문의 메일", [("메일 보내기", inquiry_mail)], f"수신 주소: {CONTACT_EMAIL}"),
+                contact_cta_row_html(inquiry_mail),
+                support_qr_section_html(),
                 support_account_section_html(),
             ]),
         },
