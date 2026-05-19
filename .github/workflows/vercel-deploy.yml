@@ -1,4 +1,4 @@
-name: Deploy to Vercel
+name: CI Build (Vercel Git Deploy)
 
 on:
   push:
@@ -9,10 +9,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    env:
-      VERCEL_ORG_ID: team_HohQnITDK4pgIwzsUJJSs2lU
-      VERCEL_PROJECT_ID: prj_meKR55EVVIvKOPKl8YpWvT5uI70f
 
     steps:
       - name: Checkout
@@ -29,23 +25,9 @@ jobs:
       - name: Build static site
         run: python scripts/build_site.py --site-url https://ssletv.com --per-page 10 --lanovel-per-page 6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          node-version: "22"
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Prepare Vercel project linkage
-        run: |
-          mkdir -p .vercel
-          cat > .vercel/project.json << 'EOF'
-          {"projectId":"prj_meKR55EVVIvKOPKl8YpWvT5uI70f","orgId":"team_HohQnITDK4pgIwzsUJJSs2lU"}
-          EOF
-
-      - name: Verify Vercel auth
-        run: vercel whoami --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy dist to Vercel (Production)
-        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} ./dist
+          name: dist-site
+          path: dist
+          if-no-files-found: error
