@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "python3 -m pip install -r requirements.txt && python3 scripts/build_site.py --site-url https://sslearchive.vercel.app --per-page 10 --lanovel-per-page 6",
   "outputDirectory": "dist",
   "git": {
     "deploymentEnabled": true
