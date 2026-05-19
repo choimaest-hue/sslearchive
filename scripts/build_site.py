@@ -39,7 +39,7 @@ SUPPORT_EMAIL_SUBJECT = "[썰TV] 문의/후원 요청"
 SUPPORT_PLATFORMS: list[tuple[str, str]] = [
     ("Toss", "https://toss.me/choimaest"),
 ]
-NAVER_SITE_VERIFICATION = "36275f7ef596c60eff1322aa781657cefd4a75f9"
+NAVER_SITE_VERIFICATION = "3c96399a4c12a0a3b14441074c80574382234e8a"
 GOOGLE_SITE_VERIFICATION = "p1sOyazCjOMOi4Nt9AcF9jaIzoxvRR0FT0sgwoTxMRY"
 BING_SITE_VERIFICATION = ""
 MIN_INDEXABLE_TEXT_CHARS = 300
@@ -219,6 +219,8 @@ def footer_html(prefix: str = "") -> str:
     <a href="{p}lanovel.html">라노벨 아카이브</a>
     <span>·</span>
     <a href="{p}contact.html">문의/후원</a>
+        <span>·</span>
+        <a href="{p}privacy.html">개인정보처리방침</a>
     <span>·</span>
     <span>© 2025 썰TV</span>
   </div>
@@ -1469,6 +1471,41 @@ def support_account_section_html() -> str:
 """
 
 
+def privacy_policy_section_html() -> str:
+    return """
+<section class="policy-section">
+    <h2>1. 수집하는 개인정보 항목</h2>
+    <p>서비스 운영 과정에서 아래 정보가 수집될 수 있습니다.</p>
+    <ul>
+        <li>문의 시: 이메일 주소, 문의 내용</li>
+        <li>접속 시: IP 주소, 브라우저 정보, 접속 일시, 기기 정보</li>
+    </ul>
+
+    <h2>2. 개인정보의 이용 목적</h2>
+    <ul>
+        <li>문의 응대 및 사용자 요청 처리</li>
+        <li>서비스 품질 개선, 오류 분석, 보안 대응</li>
+        <li>부정 이용 방지 및 운영 안정성 확보</li>
+    </ul>
+
+    <h2>3. 보유 및 이용 기간</h2>
+    <p>개인정보는 수집 및 이용 목적이 달성되면 지체 없이 파기합니다. 단, 관련 법령에 따라 보관이 필요한 경우 해당 기간 동안 보관할 수 있습니다.</p>
+
+    <h2>4. 제3자 제공 및 처리위탁</h2>
+    <p>원칙적으로 개인정보를 제3자에게 제공하지 않습니다. 다만 서비스 제공을 위해 호스팅, 분석 등 외부 서비스를 이용할 수 있으며, 이 경우 필요한 범위 내에서만 처리됩니다.</p>
+
+    <h2>5. 이용자 권리</h2>
+    <p>이용자는 본인 개인정보에 대해 열람, 정정, 삭제, 처리정지를 요청할 수 있습니다. 요청은 아래 문의처로 접수할 수 있습니다.</p>
+
+    <h2>6. 문의처</h2>
+    <p>이메일: choimaest@naver.com</p>
+
+    <h2>7. 시행일</h2>
+    <p>본 방침은 2026-05-05부터 적용됩니다.</p>
+</section>
+"""
+
+
 def write_support_pages(output: Path, site_url: str) -> list[str]:
     inquiry_mail = mailto_url(
         CONTACT_EMAIL,
@@ -1484,6 +1521,11 @@ def write_support_pages(output: Path, site_url: str) -> list[str]:
                 support_qr_section_html(),
                 support_account_section_html(),
             ]),
+        },
+        "privacy.html": {
+            "title": "개인정보처리방침",
+            "description": "썰TV 개인정보처리방침 안내",
+            "body": privacy_policy_section_html(),
         },
     }
 
@@ -1530,6 +1572,7 @@ def write_html_sitemap(output: Path, ssul_items: list[dict[str, Any]], lanovel_i
         sitemap_link("ssul.html", "썰 아카이브", f"{len(ssul_items)}개"),
         sitemap_link("lanovel.html", "라노벨 아카이브", f"{len(lanovel_items)}개"),
         sitemap_link("contact.html", "문의/후원", CONTACT_EMAIL),
+        sitemap_link("privacy.html", "개인정보처리방침", "개인정보 수집 및 이용 안내"),
     ])
     category_links = "".join(
         sitemap_link(f"category-{SLUG[cat]}.html", cat, f"{sum(1 for item in ssul_items if item.get('category') == cat)}개")
