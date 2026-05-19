@@ -32,10 +32,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      - name: Prepare Vercel project linkage
+        run: |
+          mkdir -p .vercel
+          cat > .vercel/project.json << 'EOF'
+          {"projectId":"prj_meKR55EVVIvKOPKl8YpWvT5uI70f","orgId":"team_HohQnITDK4pgIwzsUJJSs2lU"}
+          EOF
+
+      - name: Verify Vercel auth
+        run: vercel whoami --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Deploy dist to Vercel (Production)
-        run: vercel deploy --prod --yes --scope=choimaest-5083s-projects --token=${{ secrets.VERCEL_TOKEN }} ./dist
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} ./dist
